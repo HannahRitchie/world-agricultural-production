@@ -4,3 +4,4 @@ scripts/countries.csv
 __pycache__/
 .DS_Store
 scripts/_shots/
+scripts/_fonts/

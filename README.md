@@ -91,10 +91,24 @@ usda-food/
     ├── build_data.py           the pipeline
     ├── build_fonts.py          regenerates data/fonts.css
     ├── entities.py             aggregate/member definitions and manual country mappings
+    ├── make_static_chart.py    renders the 4x2 publishing PNG in static-charts/
     ├── check_views.py          screenshots every view + control combination
     └── check_regressions.py    asserts view switching, metric fallback, deep links,
                                 vintage marking, EU-folding notes, full table
 ```
+
+## Static chart for publishing
+
+`uv run scripts/make_static_chart.py` renders
+`static-charts/yield-and-production-4x2.png` — a 2508x1311 small-multiples figure
+of **World** yield (top row) and production (bottom row) for corn, wheat, rice and
+soybeans, 1960–2025.
+
+Each panel holds a single series, so no categorical palette is needed: the column
+headings carry identity and one validated ink serves every panel. y-axes are shared
+within each row so the four crops compare directly. The script reuses
+`data/fonts.css`, instancing Inter's variable font at weight 700 — matplotlib would
+otherwise render "bold" as regular without warning.
 
 ## Checks
 
@@ -197,10 +211,19 @@ commodity whose last year reaches the current vintage.
 
 **`Yield` is exactly `Production / Area`** in PSD's own units. The build derives
 the unit constant `k` in `yield = k × production / area` empirically per
-commodity (median over all country-years) rather than hardcoding it, so a USDA
-unit change surfaces instead of silently corrupting aggregates. It comes out at
-`k = 1` for grains and oilseeds (1000 MT over 1000 HA gives MT/HA) and
-`k = 217.72` for cotton (1000 480-lb bales over 1000 HA gives KG/HA).
+commodity (median over all country-years) rather than hardcoding it. Two
+commodities are why that matters:
+
+| Commodity | k | Why |
+|---|---|---|
+| Grains, oilseeds, oil palm | `1.0000` | 1000 MT over 1000 HA gives MT/HA |
+| Cotton | `217.7358` | 1000 480-lb bales over 1000 HA gives KG/HA |
+| **Rice (milled)** | **`1.5351`** | production is **milled**, but area and yield are on a **rough (paddy)** basis — k is the milling conversion (milled ≈ 65% of paddy) |
+
+Rice is the trap: `production / area` gives 3.14 t/ha for the world in 2025, while
+USDA publishes 4.82. Hardcoding `k = 1` would have silently produced a wrong
+aggregate rice yield. Anyone comparing a rice yield here against a rice production
+figure should note they are on different bases.
 
 **World and continental aggregates are computed here — PSD's bulk file has no
 World row.** Production and area are summed; **yield is total production over
