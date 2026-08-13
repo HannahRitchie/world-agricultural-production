@@ -99,10 +99,18 @@ usda-food/
 
 ## Static chart for publishing
 
-`uv run scripts/make_static_chart.py` renders
-`static-charts/yield-and-production-4x2.png` — a 2508x1311 small-multiples figure
-of **World** yield (top row) and production (bottom row) for corn, wheat, rice and
-soybeans, 1960–2025.
+`scripts/make_static_chart.py` renders a 2508x1311 small-multiples figure of
+**World** yield (top row) and production (bottom row) for corn, wheat, rice and
+soybeans, into `static-charts/`:
+
+```bash
+uv run scripts/make_static_chart.py                        # lines, 1960-2025
+uv run scripts/make_static_chart.py --kind column --start 2000
+```
+
+The headline numbers in the subtitle are computed from the data for whichever span
+is requested, and switch between percentages and multiples by magnitude — so they
+cannot drift out of step with the chart or with a monthly rebuild.
 
 Each panel holds a single series, so no categorical palette is needed: the column
 headings carry identity and one validated ink serves every panel. y-axes are shared
