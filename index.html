@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How is food production changing across the world?</title>
+<!-- Inline so the browser never requests /favicon.ico and 404s into the console. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%233c4e66'/%3E%3Cpath d='M3 12h2V7H3v5zm4 0h2V4H7v8zm4 0h2V9h-2v3z' fill='%23fff'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<style>
+* { box-sizing: border-box; }
+body {
+    margin: 0; padding: 24px 20px 40px;
+    font-family: 'Lato', sans-serif; color: #1d2934;
+    background: #fff; -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; }
+
+.page-head {
+    margin: 0 0 26px; padding-bottom: 20px; border-bottom: 1px solid #e7ecf1;
+}
+/* Rule spans the page; the text keeps a readable measure. */
+.page-title, .page-intro { max-width: 880px; }
+.page-title {
+    font-family: 'Inter', sans-serif; font-weight: 700; font-size: 27px;
+    line-height: 1.2; margin: 0 0 10px; color: #1d2934;
+}
+.page-intro { font-size: 14px; color: #4a5a6a; margin: 0; line-height: 1.6; }
+.page-intro + .page-intro { margin-top: 11px; }
+
+#chart-title {
+    font-family: 'Inter', sans-serif; font-weight: 700; font-size: 22px;
+    line-height: 1.25; margin: 0 0 4px;
+}
+.subtitle { font-size: 13px; color: #5b6b7c; margin: 0 0 18px; line-height: 1.45; }
+
+/* ---- controls ---------------------------------------------------------- */
+.controls {
+    display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; max-width: 620px;
+    margin-bottom: 14px;
+}
+.ctrl { position: relative; }
+.ctrl > label {
+    display: block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #6b7c8d; margin-bottom: 5px;
+}
+select, .combo-btn {
+    width: 100%; font-family: 'Lato', sans-serif; font-size: 13px;
+    padding: 8px 10px; border: 1px solid #ccd4dc; border-radius: 3px;
+    background: #fff; color: #1d2934; cursor: pointer; height: 36px;
+}
+select:focus, .combo-btn:focus { outline: none; border-color: #3c4e66; }
+select option:disabled { color: #b5bfc9; }
+.combo-btn { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-btn::after { content: '▾'; float: right; color: #6b7c8d; }
+
+/* searchable dropdown panel */
+.combo-panel {
+    display: none; position: absolute; z-index: 30; top: 100%; left: 0;
+    min-width: 100%; width: 300px; margin-top: 3px; background: #fff;
+    border: 1px solid #ccd4dc; border-radius: 3px;
+    box-shadow: 0 6px 18px rgba(29,41,52,0.14);
+    max-height: 340px; overflow: hidden; flex-direction: column;
+}
+.combo-panel.open { display: flex; }
+.search-input {
+    margin: 8px; padding: 6px 8px; font-family: 'Lato', sans-serif; font-size: 13px;
+    border: 1px solid #ccd4dc; border-radius: 3px; flex: 0 0 auto;
+}
+.search-input:focus { outline: none; border-color: #3c4e66; }
+.opt-list { overflow-y: auto; padding: 0 4px 6px; }
+.opt-group {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; color: #8b98a5;
+    letter-spacing: 0.05em; padding: 8px 8px 3px;
+}
+.opt-item {
+    display: flex; align-items: center; gap: 7px; padding: 5px 8px;
+    font-size: 13px; cursor: pointer; border-radius: 2px;
+}
+.opt-item:hover { background: #f2f5f8; }
+.opt-item.current { background: #eef1f5; font-weight: 700; }
+.opt-item input { accent-color: #3c4e66; margin: 0; cursor: pointer; flex: 0 0 auto; }
+.opt-empty { padding: 10px; font-size: 12px; color: #8b98a5; }
+
+/* ---- tabs -------------------------------------------------------------- */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid #e0e6eb; margin-bottom: 14px; }
+.tab {
+    font-family: 'Lato', sans-serif; font-size: 13px; padding: 7px 14px;
+    background: none; border: none; border-bottom: 2px solid transparent;
+    color: #6b7c8d; cursor: pointer;
+}
+.tab:hover { color: #1d2934; }
+.tab.active { color: #3c4e66; font-weight: 700; border-bottom-color: #3c4e66; }
+
+/* ---- layout: sidebar + chart ------------------------------------------- */
+.main { display: grid; grid-template-columns: 236px 1fr; gap: 22px; align-items: start; }
+
+.sidebar {
+    border: 1px solid #e0e6eb; border-radius: 3px;
+    display: flex; flex-direction: column; height: 556px; overflow: hidden;
+}
+.side-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #6b7c8d;
+    padding: 10px 10px 0; flex: 0 0 auto;
+}
+.sidebar .search-input { margin: 8px 10px; }
+.sidebar .opt-list { flex: 1 1 auto; padding: 0 6px 6px; }
+.side-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid #e7ecf1; padding: 7px 10px; font-size: 12px;
+    flex: 0 0 auto;
+}
+.side-foot button {
+    background: none; border: none; color: #3c4e66; font-family: 'Lato', sans-serif;
+    font-size: 12px; cursor: pointer; padding: 2px 0; text-decoration: underline;
+}
+.side-count { color: #8b98a5; }
+
+/* ---- chart area -------------------------------------------------------- */
+#viz { width: 100%; height: 470px; position: relative; }
+#viz.tall { height: auto; min-height: 470px; }
+.axis text { font-family: 'Lato', sans-serif; font-size: 11px; fill: #6b7c8d; }
+.axis .domain { display: none; }
+.axis line { stroke: #ccd4dc; }
+.grid line { stroke: #ccc; stroke-opacity: 0.7; stroke-dasharray: 3,3; stroke-width: 1px; }
+.grid .domain { display: none; }
+.line-label { font-family: 'Lato', sans-serif; font-size: 12px; font-weight: 700; }
+.bar-val { font-family: 'Lato', sans-serif; font-size: 11px; fill: #4a5a6a; }
+.axis-title { font-family: 'Lato', sans-serif; font-size: 11px; fill: #8b98a5; }
+.band-label {
+    font-family: 'Lato', sans-serif; font-size: 10px; fill: #97a3b0;
+    text-transform: uppercase; letter-spacing: 0.05em;
+}
+.no-data {
+    display: flex; align-items: center; justify-content: center; height: 100%;
+    color: #8b98a5; font-size: 14px; text-align: center; padding: 0 40px;
+}
+
+/* ---- download button --------------------------------------------------- */
+.chart-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+.dl-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'Lato', sans-serif; font-size: 12px; color: #5b6b7c;
+    background: #fff; border: 1px solid #ccd4dc; border-radius: 3px;
+    padding: 5px 10px; cursor: pointer;
+}
+.dl-btn:hover { border-color: #3c4e66; color: #3c4e66; }
+.dl-btn[disabled] { opacity: 0.6; cursor: default; }
+
+/* ---- year slider ------------------------------------------------------- */
+.slider-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.play {
+    width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%;
+    border: 1px solid #ccd4dc; background: #fff; color: #3c4e66;
+    cursor: pointer; font-size: 11px; line-height: 1;
+}
+.play:hover { border-color: #3c4e66; }
+.year-lab {
+    font-family: 'Lato', sans-serif; font-size: 13px; font-weight: 700;
+    color: #3c4e66; flex: 0 0 auto; min-width: 40px;
+}
+.year-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 3px 6px; border-radius: 2px;
+    background: #eef1f5; color: #6b7c8d; white-space: nowrap; flex: 0 0 auto;
+}
+.year-badge:empty { display: none; }
+/* Start year sits left of the track, end year right of it. */
+.range-end-lab { text-align: right; }
+#range-start-label, #range-end-label { display: none; }
+.slider-row.is-range #range-start-label,
+.slider-row.is-range #range-end-label { display: block; }
+#year-range { flex: 1; accent-color: #3c4e66; height: 4px; }
+
+/* dual-handle year range, used in chart view */
+.dual-range-wrapper { position: relative; flex: 1; height: 30px; display: none; }
+.dual-range-wrapper.show { display: block; }
+.dual-range-track-bg, .dual-range-track-fill {
+    position: absolute; top: 13px; height: 4px; border-radius: 2px;
+}
+.dual-range-track-bg { left: 0; right: 0; background: #e0e6eb; }
+.dual-range-track-fill { background: #3c4e66; }
+.dual-range-wrapper input[type=range] {
+    position: absolute; left: 0; top: 0; width: 100%; height: 30px; margin: 0;
+    -webkit-appearance: none; appearance: none; background: transparent;
+    pointer-events: none;
+}
+.dual-range-wrapper input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; pointer-events: auto; width: 15px; height: 15px;
+    border-radius: 50%; background: #3c4e66; border: 2px solid #fff;
+    cursor: grab; box-shadow: 0 1px 3px rgba(29,41,52,0.35);
+}
+.dual-range-wrapper input[type=range]::-moz-range-thumb {
+    pointer-events: auto; width: 13px; height: 13px; border-radius: 50%;
+    background: #3c4e66; border: 2px solid #fff; cursor: grab;
+}
+
+/* ---- table ------------------------------------------------------------- */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+    text-align: right; font-weight: 700; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.04em; color: #6b7c8d; padding: 7px 10px;
+    border-bottom: 1px solid #ccd4dc; cursor: pointer; white-space: nowrap;
+    position: sticky; top: 0; background: #fff;
+}
+th:first-child, td:first-child { text-align: left; }
+th:hover { color: #1d2934; }
+th.sorted { color: #3c4e66; }
+td { padding: 6px 10px; border-bottom: 1px solid #eef2f5; font-variant-numeric: tabular-nums; text-align: right; }
+tbody tr:hover { background: #f7f9fb; }
+tbody tr.is-selected td { background: #eef1f5; font-weight: 700; }
+/* World, continents and the EU are aggregates, not countries — mark them so a
+   value-sorted list does not read as a pure country ranking. */
+td.agg { font-style: italic; color: #5b6b7c; }
+.tbl-scroll { max-height: 520px; overflow-y: auto; }
+
+/* ---- legend + tooltip -------------------------------------------------- */
+.legend {
+    display: flex; align-items: center; gap: 0; margin: 4px 0 0; flex-wrap: wrap;
+    justify-content: center;
+}
+.legend-item.is-bin { cursor: pointer; }
+.legend-swatch { transition: outline-color 0.1s; outline: 2px solid transparent; outline-offset: 0; }
+.legend-item.is-bin:hover .legend-swatch { outline-color: #1d2934; }
+.legend-item { display: flex; flex-direction: column; align-items: flex-start; }
+.legend-swatch { width: 42px; height: 10px; }
+.legend-unit { margin-left: 10px; align-self: flex-start; }
+.legend-tick { font-size: 10px; color: #6b7c8d; margin-top: 3px; }
+.legend-note { font-size: 11px; color: #8b98a5; margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+.vintage-legend {
+    display: flex; flex-wrap: wrap; gap: 18px; margin-top: 8px;
+    font-size: 11px; color: #6b7c8d;
+}
+.vintage-item { display: inline-flex; align-items: center; gap: 5px; }
+.vintage-swatch {
+    width: 16px; height: 11px; display: inline-block; border: 1px solid #e0e6eb;
+}
+.vintage-dash {
+    width: 18px; height: 0; display: inline-block;
+    border-top: 2px dashed #6b7c8d;
+}
+.vintage-dot {
+    width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+    background: #fff; border: 1.8px solid #6b7c8d; margin-left: -3px;
+}
+#tooltip {
+    position: absolute; pointer-events: none; opacity: 0; z-index: 50;
+    background: #fff; border: 1px solid #ccd4dc; border-radius: 3px;
+    box-shadow: 0 3px 12px rgba(29,41,52,0.16); padding: 7px 9px;
+    font-size: 12px; line-height: 1.4; transition: opacity 0.08s;
+}
+#tooltip .tt-name { font-weight: 700; margin-bottom: 2px; }
+#tooltip .tt-val { font-variant-numeric: tabular-nums; }
+#tooltip .tt-note { color: #8b98a5; font-size: 11px; margin-top: 3px; }
+
+footer {
+    margin-top: 22px; padding-top: 12px; border-top: 1px solid #e7ecf1;
+    font-size: 11px; font-weight: 400; color: #5b6b7c; line-height: 1.6;
+}
+footer a { color: #46566a; }
+footer p { margin: 0; }
+.foot-source { margin-bottom: 1.1em !important; }
+
+@media (max-width: 860px) {
+    .page-title { font-size: 22px; }
+    .page-intro { font-size: 13px; }
+    .main { grid-template-columns: 1fr; }
+    .sidebar { height: 300px; order: 2; }
+    .chart-col { order: 1; }
+    .controls { grid-template-columns: 1fr; }
+    #viz { height: 420px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header class="page-head">
+        <h1 class="page-title">How is food production changing across the world?</h1>
+        <p class="page-intro">
+            Estimates of yield, production, and harvested area of major crops and
+            agricultural products across the world. This includes historical estimates,
+            and a forecast for the current marketing year. This is updated monthly based
+            on the USDA's latest publication.
+        </p>
+        <p class="page-intro">
+            Select a crop or animal product from the dropdown, select countries or
+            regions from the list, and a metric to compare.
+        </p>
+    </header>
+
+    <h2 id="chart-title"></h2>
+    <p class="subtitle" id="subtitle"></p>
+
+    <div class="controls">
+        <div class="ctrl">
+            <label for="food-btn">Food</label>
+            <button class="combo-btn" id="food-btn" type="button">Wheat</button>
+            <div class="combo-panel" id="food-panel">
+                <input class="search-input" id="food-search" type="text"
+                       placeholder="Search foods…" autocomplete="off">
+                <div class="opt-list" id="food-list"></div>
+            </div>
+        </div>
+        <div class="ctrl">
+            <label for="sel-metric">Metric</label>
+            <select id="sel-metric"></select>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" data-view="chart">Chart</button>
+        <button class="tab" data-view="map">Map</button>
+        <button class="tab" data-view="columns">Columns</button>
+        <button class="tab" data-view="table">Table</button>
+    </div>
+
+    <div class="main">
+        <aside class="sidebar">
+            <div class="side-title">Country / region</div>
+            <input class="search-input" id="ent-search" type="text"
+                   placeholder="Search countries…" autocomplete="off">
+            <div class="opt-list" id="ent-list"></div>
+            <div class="side-foot">
+                <button type="button" id="ent-clear">Clear all</button>
+                <span class="side-count" id="ent-count"></span>
+            </div>
+        </aside>
+
+        <div class="chart-col">
+            <div id="viz"></div>
+            <div id="legend-holder"></div>
+            <div class="slider-row" id="slider-row">
+                <button class="play" id="play" title="Play">▶</button>
+                <span class="year-lab" id="year-label"></span>
+                <span class="year-badge" id="year-badge"></span>
+                <input type="range" id="year-range" step="1">
+                <span class="year-lab range-end-lab" id="range-start-label"></span>
+                <div class="dual-range-wrapper" id="dual-wrap">
+                    <div class="dual-range-track-bg"></div>
+                    <div class="dual-range-track-fill" id="range-fill"></div>
+                    <input type="range" id="range-start-input" step="1">
+                    <input type="range" id="range-end-input" step="1">
+                </div>
+                <span class="year-lab" id="range-end-label"></span>
+            </div>
+            <div class="chart-tools" id="chart-tools">
+                <button type="button" class="dl-btn" id="dl-btn" title="Download this chart as a PNG">
+                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                        <path d="M8 1v8.5M4.5 6.5L8 10l3.5-3.5M2 13.5h12" fill="none"
+                              stroke="currentColor" stroke-width="1.6"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span id="dl-label">Download PNG</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p class="foot-source">
+            Data source: <a href="https://apps.fas.usda.gov/psdonline/app/index.html"
+            target="_blank" rel="noopener">USDA Foreign Agricultural Service,
+            Production, Supply and Distribution (PSD)</a>
+        </p>
+        <p class="foot-note">
+            <span id="vintage-note"></span><br>
+            <span id="updated-note"></span>
+        </p>
+    </footer>
+</div>
+<div id="tooltip"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// state
+// ---------------------------------------------------------------------------
+let INDEX = null, TOPO = null, COMMODITY = null;
+const CACHE = new Map();
+const ENT = new Map();          // code -> entity meta
+
+let currentFood = null;
+let currentMetric = 'production';
+let selectedEntities = [];
+// The Columns view shows a single entity. Kept separate from selectedEntities so
+// switching to Columns and back does not destroy a multi-country selection.
+let columnEntity = null;
+let currentView = 'chart';
+let currentYear = null;
+let chartYearStart = null, chartYearEnd = null;
+let playTimer = null;
+let tableSort = { key: 'value', dir: -1 };
+const isEmbedded = new URLSearchParams(location.search).get('embed') === '1';
+
+const CONTINENT_NAMES = ['Africa', 'Asia', 'Europe', 'North America', 'Oceania',
+                         'South America'];
+
+const SERIES_COLORS = ['#3c4e66', '#c15065', '#578145', '#c86a3c', '#6b5b95',
+                       '#2f8e9e', '#a8863b', '#8f4a6b', '#4a7ba7', '#7d8c3f'];
+
+const RAMPS = {
+    production: ['#edf8e9', '#c7e9c0', '#a1d99b', '#74c476', '#41ab5d', '#238b45', '#005a32'],
+    yield:      ['#f2f0f7', '#dadaeb', '#bcbddc', '#9e9ac8', '#807dba', '#6a51a3', '#4a1486'],
+    area:       ['#feedde', '#fdd0a2', '#fdae6b', '#fd8d3c', '#f16913', '#d94801', '#8c2d04'],
+};
+
+const MUTED = '#a9b5c1';
+
+// ---------------------------------------------------------------------------
+// data vintage: the newest marketing year is a USDA forecast, the one before it
+// a provisional estimate still open to revision. Both come from the build, and
+// are null for discontinued series whose last year is settled history.
+// ---------------------------------------------------------------------------
+function provisionalYear() { return COMMODITY ? COMMODITY.year_provisional : null; }
+function projectionYear() { return COMMODITY ? COMMODITY.year_projection : null; }
+
+function yearStatus(y) {
+    if (y !== null && y === projectionYear()) return 'projection';
+    if (y !== null && y === provisionalYear()) return 'provisional';
+    return null;
+}
+
+const STATUS_LABEL = { provisional: 'Provisional', projection: 'USDA forecast' };
+
+// ---------------------------------------------------------------------------
+// units + formatting
+// ---------------------------------------------------------------------------
+function unitSpec(unit, maxVal) {
+    const u = (unit || '').replace(/[()]/g, '').trim();
+    const big = maxVal >= 5000;
+    switch (u) {
+        case '1000 MT':      return big ? { d: 1000, label: 'million tonnes' }   : { d: 1, label: 'thousand tonnes' };
+        case '1000 MT CWE':  return big ? { d: 1000, label: 'million tonnes (carcass weight)' } : { d: 1, label: 'thousand tonnes (carcass weight)' };
+        case '1000 HA':      return big ? { d: 1000, label: 'million hectares' } : { d: 1, label: 'thousand hectares' };
+        case '1000 HEAD':    return big ? { d: 1000, label: 'million head' }     : { d: 1, label: 'thousand head' };
+        case 'MT/HA':        return { d: 1, label: 'tonnes per hectare' };
+        case 'KG/HA':        return { d: 1, label: 'kilograms per hectare' };
+        case 'MT':           return maxVal >= 1e6 ? { d: 1e6, label: 'million tonnes' }
+                                  : maxVal >= 1000 ? { d: 1000, label: 'thousand tonnes' }
+                                  : { d: 1, label: 'tonnes' };
+        case '1000 480 lb. Bales': return big ? { d: 1000, label: 'million 480 lb bales' } : { d: 1, label: 'thousand 480 lb bales' };
+        case '1000 60 KG BAGS':    return big ? { d: 1000, label: 'million 60 kg bags' }   : { d: 1, label: 'thousand 60 kg bags' };
+        default:             return { d: 1, label: u.toLowerCase() };
+    }
+}
+
+function fmt(v, spec) {
+    if (v === null || v === undefined) return '–';
+    const x = v / spec.d;
+    const a = Math.abs(x);
+    const dp = a === 0 ? 0 : a < 1 ? 2 : a < 10 ? 2 : a < 100 ? 1 : 0;
+    return x.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+}
+
+function metricName(key) {
+    return (INDEX.metrics.find(m => m.key === key) || {}).name || key;
+}
+
+// ---------------------------------------------------------------------------
+// data access
+// ---------------------------------------------------------------------------
+function entityName(code) {
+    if (code.startsWith('@')) return code.slice(1);
+    const e = ENT.get(code);
+    return e ? e.name : code;
+}
+
+function seriesFor(code) {
+    const s = COMMODITY.series[code];
+    return s ? s[currentMetric] || null : null;
+}
+
+function valueAt(code, year) {
+    const s = seriesFor(code);
+    if (!s) return null;
+    const i = COMMODITY.years.indexOf(year);
+    return i < 0 ? null : s[i];
+}
+
+/** Codes with data for the current metric, excluding computed aggregates. */
+function reportingCodes() {
+    return Object.keys(COMMODITY.series)
+        .filter(c => !c.startsWith('@') && COMMODITY.series[c][currentMetric]);
+}
+
+function maxOf(codes, years) {
+    let m = 0;
+    codes.forEach(c => {
+        const s = seriesFor(c);
+        if (!s) return;
+        COMMODITY.years.forEach((y, i) => {
+            if (years && (y < years[0] || y > years[1])) return;
+            if (s[i] !== null && s[i] > m) m = s[i];
+        });
+    });
+    return m;
+}
+
+// ---------------------------------------------------------------------------
+// title + URL
+// ---------------------------------------------------------------------------
+function isTimeSeries() { return currentView === 'chart' || currentView === 'columns'; }
+
+function updateTitle() {
+    const yearSuffix = isTimeSeries() ? '' : ', ' + currentYear;
+    const food = COMMODITY ? COMMODITY.name : '';
+    let t;
+    if (currentMetric === 'production') t = `${food} production`;
+    else if (currentMetric === 'yield') t = `${food} yield`;
+    else t = `Area harvested for ${food.toLowerCase()}`;
+    d3.select('#chart-title').text(t.charAt(0).toUpperCase() + t.slice(1) + yearSuffix);
+
+    d3.select('#subtitle').text({
+        production: 'Total quantity produced each marketing year.',
+        yield: 'Quantity harvested per hectare of land.',
+        area: 'Land area harvested each marketing year.',
+    }[currentMetric]);
+
+    // The years are substituted per food, not hardcoded: the fruit, nut and juice
+    // series run a year behind, so for them it is 2024 and 2025.
+    const prov = provisionalYear(), proj = projectionYear();
+    const vintage = proj === null ? '' :
+        ` ${prov} is a provisional estimate and ${proj} is a USDA forecast ` +
+        `(which is updated monthly).`;
+    d3.select('#vintage-note').text(
+        'Note: Years are marketing years, labelled by the beginning year.' + vintage);
+    d3.select('#updated-note').text(
+        INDEX.source_updated ? `Last updated: ${INDEX.source_updated}.` : '');
+}
+
+function updateURL() {
+    if (isEmbedded) return;
+    const p = new URLSearchParams();
+    p.set('tab', currentView);
+    p.set('food', currentFood);
+    p.set('metric', currentMetric);
+    if (isTimeSeries()) p.set('time', `${chartYearStart}..${chartYearEnd}`);
+    else p.set('year', currentYear);
+    if (currentView === 'columns') { if (columnEntity) p.set('entities', columnEntity); }
+    else if (selectedEntities.length > 0) p.set('entities', selectedEntities.join('~'));
+    history.replaceState(null, '', '?' + p.toString());
+}
+
+function restoreFromURL() {
+    const p = new URLSearchParams(location.search);
+    if (p.get('food') && INDEX.commodities.some(c => c.slug === p.get('food'))) currentFood = p.get('food');
+    if (p.get('metric')) currentMetric = p.get('metric');
+    if (p.get('tab')) currentView = p.get('tab');
+    if (p.get('entities')) {
+        selectedEntities = p.get('entities').split('~');
+        columnEntity = selectedEntities[0];
+    }
+    const t = p.get('time');
+    if (t && t.includes('..')) {
+        const [a, b] = t.split('..').map(Number);
+        chartYearStart = a; chartYearEnd = b;
+    }
+    if (p.get('year')) currentYear = +p.get('year');
+}
+
+// ---------------------------------------------------------------------------
+// food dropdown (searchable)
+// ---------------------------------------------------------------------------
+function buildFoodList(filter) {
+    const q = (filter || '').trim().toLowerCase();
+    const list = d3.select('#food-list');
+    list.selectAll('*').remove();
+    const matches = INDEX.commodities.filter(c =>
+        !q || c.name.toLowerCase().includes(q) || c.psd_name.toLowerCase().includes(q)
+           || c.category.toLowerCase().includes(q));
+    if (!matches.length) {
+        list.append('div').attr('class', 'opt-empty').text('No foods match that search.');
+        return;
+    }
+    const groups = d3.group(matches, d => d.category);
+    [...groups.keys()].sort().forEach(cat => {
+        list.append('div').attr('class', 'opt-group').text(cat);
+        list.selectAll(null).data(groups.get(cat)).enter()
+            .append('div')
+            .attr('class', d => 'opt-item' + (d.slug === currentFood ? ' current' : ''))
+            .text(d => d.name)
+            .on('click', (event, d) => {
+                if (d.slug === currentFood) { closeFoodPanel(); return; }
+                currentFood = d.slug;
+                chartYearStart = chartYearEnd = currentYear = null;   // re-clamp
+                closeFoodPanel();
+                loadCommodity().then(() => {
+                    syncMetricSelect();
+                    // Keep the country selection across foods, dropping only those
+                    // this food does not report. Fall back to top producers only if
+                    // that leaves nothing — and not if the user had cleared the list.
+                    const had = selectedEntities.length > 0;
+                    const kept = selectedEntities.filter(c => COMMODITY.series[c]);
+                    selectedEntities = kept.length ? kept : (had ? defaultCodes() : []);
+                    if (columnEntity && !COMMODITY.series[columnEntity]) columnEntity = null;
+                    document.getElementById('ent-search').value = '';
+                    buildEntityList('');
+                    render(); updateURL();
+                });
+            });
+    });
+}
+
+function closeFoodPanel() { document.getElementById('food-panel').classList.remove('open'); }
+
+function initFoodCombo() {
+    const panel = document.getElementById('food-panel');
+    const search = document.getElementById('food-search');
+    document.getElementById('food-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        const open = panel.classList.toggle('open');
+        if (open) { search.value = ''; buildFoodList(''); search.focus(); }
+    });
+    search.addEventListener('input', function () { buildFoodList(this.value); });
+    search.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeFoodPanel();
+        if (e.key === 'Enter') {
+            const first = document.querySelector('#food-list .opt-item');
+            if (first) first.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        }
+    });
+    document.addEventListener('click', e => {
+        if (!panel.contains(e.target) && e.target.id !== 'food-btn') closeFoodPanel();
+    });
+}
+
+function syncFoodButton() {
+    d3.select('#food-btn').text(COMMODITY ? COMMODITY.name : '');
+}
+
+// ---------------------------------------------------------------------------
+// metric select
+// ---------------------------------------------------------------------------
+function buildMetricSelect() {
+    const sel = d3.select('#sel-metric');
+    sel.selectAll('option').data(INDEX.metrics).enter().append('option')
+        .attr('value', d => d.key).text(d => d.name);
+    sel.on('change', function () {
+        currentMetric = this.value;
+        render(); updateURL();
+    });
+}
+
+/** Grey out metrics this commodity does not report, and fall back if needed. */
+function syncMetricSelect() {
+    const avail = COMMODITY.metrics;
+    d3.select('#sel-metric').selectAll('option')
+        .property('disabled', d => !avail.includes(d.key));
+    if (!avail.includes(currentMetric)) currentMetric = avail[0];
+    d3.select('#sel-metric').property('value', currentMetric);
+}
+
+// ---------------------------------------------------------------------------
+// country / region sidebar
+// ---------------------------------------------------------------------------
+function buildEntityList(filter) {
+    const q = (filter || '').trim().toLowerCase();
+    const codes = new Set(Object.keys(COMMODITY.series));
+    const list = d3.select('#ent-list');
+    list.selectAll('*').remove();
+
+    // The Columns view plots one entity at a time, so offer radios there and
+    // checkboxes everywhere else.
+    const single = currentView === 'columns';
+    const chosen = single ? (columnEntity ? [columnEntity] : []) : selectedEntities;
+
+    // With ~200 entities the selection would otherwise be scattered down an
+    // alphabetical list, so lift it to the top. Suppressed while searching, when
+    // the user wants to see matches in their normal groups.
+    const avail = INDEX.entities.filter(e => codes.has(e.code));
+    const pinned = q ? [] : chosen
+        .map(c => avail.find(e => e.code === c)).filter(Boolean);
+    const pinnedSet = new Set(pinned.map(e => e.code));
+    const rest = avail.filter(e => !pinnedSet.has(e.code));
+    const of = kind => rest.filter(e => e.kind === kind);
+
+    const groups = [
+        ['Selected', pinned],
+        ['World & continents', of('aggregate')],
+        ['Regions', of('region')],
+        ['Countries', of('country')],
+        ['Other & former states', of('historic')],
+    ];
+    let any = false;
+    groups.forEach(([label, items]) => {
+        const shown = items.filter(e => !q || e.name.toLowerCase().includes(q));
+        if (!shown.length) return;
+        any = true;
+        list.append('div').attr('class', 'opt-group').text(label);
+        const rows = list.selectAll(null).data(shown).enter()
+            .append('label').attr('class', 'opt-item');
+        rows.append('input')
+            .attr('type', single ? 'radio' : 'checkbox')
+            .attr('name', single ? 'ent-single' : null)
+            .property('checked', d => chosen.includes(d.code))
+            .on('change', function (event, d) {
+                if (single) {
+                    columnEntity = d.code;
+                } else if (this.checked) {
+                    if (!selectedEntities.includes(d.code)) selectedEntities.push(d.code);
+                } else {
+                    selectedEntities = selectedEntities.filter(c => c !== d.code);
+                }
+                // Reset the search so the user is never left staring at a
+                // one-row filtered list with no obvious way back.
+                document.getElementById('ent-search').value = '';
+                buildEntityList('');
+                render(); updateURL();
+            });
+        rows.append('span').text(d => d.name);
+    });
+    if (!any) list.append('div').attr('class', 'opt-empty').text('No countries match that search.');
+    syncEntityCount();
+}
+
+function syncEntityCount() {
+    const single = currentView === 'columns';
+    d3.select('#ent-clear').style('display', single ? 'none' : 'inline');
+    if (single) {
+        d3.select('#ent-count').text('one at a time in Columns');
+        return;
+    }
+    const n = selectedEntities.length;
+    d3.select('#ent-count').text(n === 0 ? 'none selected' : `${n} selected`);
+}
+
+function initEntityControl() {
+    document.getElementById('ent-search').addEventListener('input', function () {
+        buildEntityList(this.value);
+    });
+    document.getElementById('ent-clear').addEventListener('click', () => {
+        selectedEntities = [];
+        document.getElementById('ent-search').value = '';
+        buildEntityList('');
+        render(); updateURL();
+    });
+}
+
+// ---------------------------------------------------------------------------
+// views
+// ---------------------------------------------------------------------------
+function setView(v) {
+    currentView = v;
+    d3.selectAll('.tab').classed('active', function () { return this.dataset.view === v; });
+    render();
+    // After render, so syncColumnEntity has resolved which entity Columns shows.
+    document.getElementById('ent-search').value = '';
+    buildEntityList('');
+    updateURL();
+}
+
+function render() {
+    if (!COMMODITY) return;
+    syncMetricSelect();
+    syncFoodButton();
+    syncColumnEntity();
+    syncEntityCount();
+    clampYears();
+    updateTitle();
+    d3.select('#viz').selectAll('*').remove();
+    d3.select('#legend-holder').selectAll('*').remove();
+    // Clear any inline height a previous view set, or the fixed-height views
+    // inherit it and collapse.
+    d3.select('#viz').style('height', null)
+        .classed('tall', currentView === 'table');
+    syncSlider();
+    d3.select('#chart-tools').style('display', currentView === 'table' ? 'none' : 'flex');
+    if (currentView === 'chart') drawLine();
+    else if (currentView === 'columns') drawColumns();
+    else if (currentView === 'map') drawMap();
+    else drawTable();
+}
+
+/** Columns shows one entity: fall back to the largest of the current selection. */
+function syncColumnEntity() {
+    if (columnEntity && seriesFor(columnEntity)) return;
+    columnEntity = selectedEntities.find(c => seriesFor(c)) || defaultCodes()[0] || null;
+}
+
+function clampYears() {
+    const ys = COMMODITY.years;
+    const withData = ys.filter((y, i) =>
+        Object.values(COMMODITY.series).some(s => s[currentMetric] && s[currentMetric][i] !== null));
+    COMMODITY._dataYears = withData.length ? withData : ys;
+    const lo = COMMODITY._dataYears[0], hi = COMMODITY._dataYears[COMMODITY._dataYears.length - 1];
+    if (currentYear === null || currentYear < lo || currentYear > hi) currentYear = hi;
+    if (chartYearStart === null || chartYearStart < lo) chartYearStart = lo;
+    if (chartYearEnd === null || chartYearEnd > hi) chartYearEnd = hi;
+    if (chartYearStart >= chartYearEnd) { chartYearStart = lo; chartYearEnd = hi; }
+}
+
+function syncSlider() {
+    const ys = COMMODITY._dataYears;
+    const isChart = isTimeSeries();
+    const r = d3.select('#year-range');
+    r.attr('min', ys[0]).attr('max', ys[ys.length - 1]).property('value', currentYear);
+    r.style('display', isChart ? 'none' : 'block');
+    d3.select('#play').style('display', isChart ? 'none' : 'block');
+    d3.select('#year-label').style('display', isChart ? 'none' : 'block');
+    d3.select('#dual-wrap').classed('show', isChart);
+    d3.select('#slider-row').classed('is-range', isChart);
+    if (isChart) { syncTimeRange(); d3.select('#year-badge').text(''); }
+    else {
+        d3.select('#year-label').text(currentYear);
+        const st = yearStatus(currentYear);
+        d3.select('#year-badge').text(st ? STATUS_LABEL[st] : '');
+    }
+}
+
+/**
+ * Outer limits of the active time-series view's timeline.
+ *
+ * The line chart spans every year the food has data, so series of different
+ * lengths stay comparable on one axis. The columns view plots a single entity, so
+ * it spans only that entity's own years — otherwise picking the UK, reported
+ * separately from 2016, leaves five blank decades of timeline.
+ */
+function viewYearBounds() {
+    const ys = COMMODITY._dataYears;
+    const full = [ys[0], ys[ys.length - 1]];
+    if (currentView !== 'columns') return full;
+    const s = columnEntity ? seriesFor(columnEntity) : null;
+    if (!s) return full;
+    const own = COMMODITY.years.filter((y, i) => s[i] !== null);
+    return own.length ? [own[0], own[own.length - 1]] : full;
+}
+
+/**
+ * The range actually drawn: the user's range clipped to the view's limits.
+ * Clipping rather than reassigning chartYearStart/End means a trip through the
+ * columns view never silently rewrites the line chart's range.
+ */
+function visibleRange() {
+    const [lo, hi] = viewYearBounds();
+    const a = Math.max(chartYearStart, lo), b = Math.min(chartYearEnd, hi);
+    return a < b ? [a, b] : [lo, hi];   // empty overlap: show the whole entity
+}
+
+/** Sync the dual-handle year range with current state. */
+function syncTimeRange() {
+    const [lo, hi] = viewYearBounds();
+    const [start, end] = visibleRange();
+    const a = document.getElementById('range-start-input');
+    const b = document.getElementById('range-end-input');
+    [a, b].forEach(inp => { inp.min = lo; inp.max = hi; });
+    a.value = start; b.value = end;
+    const span = Math.max(1, hi - lo);
+    const l = (start - lo) / span * 100;
+    const r = (end - lo) / span * 100;
+    const fill = document.getElementById('range-fill');
+    fill.style.left = l + '%';
+    fill.style.width = Math.max(0, r - l) + '%';
+    d3.select('#range-start-label').text(start);
+    d3.select('#range-end-label').text(end);
+}
+
+function initTimeRange() {
+    const a = document.getElementById('range-start-input');
+    const b = document.getElementById('range-end-input');
+    // Guard against the range on screen, not the stored one, so the handles keep
+    // at least a year between them in the columns view too, where the stored
+    // range can extend beyond the entity's own years.
+    a.addEventListener('input', function () {
+        const [, end] = visibleRange();
+        chartYearStart = Math.min(+this.value, end - 1);
+        syncTimeRange(); redrawTimeSeries(); updateURL();
+    });
+    b.addEventListener('input', function () {
+        const [start] = visibleRange();
+        chartYearEnd = Math.max(+this.value, start + 1);
+        syncTimeRange(); redrawTimeSeries(); updateURL();
+    });
+}
+
+function redrawTimeSeries() {
+    d3.select('#viz').selectAll('*').remove();
+    d3.select('#legend-holder').selectAll('*').remove();
+    if (currentView === 'columns') drawColumns(); else drawLine();
+}
+
+function defaultCodes() {
+    const cat = INDEX.commodities.find(c => c.slug === currentFood);
+    const d = (cat.defaults || []).filter(c => seriesFor(c));
+    return d.length ? d.slice() : ['@World'];
+}
+
+// ---- line chart -----------------------------------------------------------
+function drawLine() {
+    const el = document.getElementById('viz');
+    const withData = selectedEntities.filter(c => seriesFor(c));
+    if (!withData.length) return promptForSelection();
+
+    const margin = { top: 26, right: 132, bottom: 34, left: 58 };
+    const w = el.clientWidth - margin.left - margin.right;
+    const h = el.clientHeight - margin.top - margin.bottom;
+
+    const [yrStart, yrEnd] = visibleRange();
+    const spec = unitSpec(COMMODITY.units[currentMetric],
+                          maxOf(withData, [yrStart, yrEnd]));
+    const years = COMMODITY.years;
+    const prov = provisionalYear(), proj = projectionYear();
+
+    const seriesData = withData.map((code, i) => ({
+        code, label: entityName(code),
+        color: SERIES_COLORS[i % SERIES_COLORS.length],
+        values: years.filter(y => y >= yrStart && y <= yrEnd)
+            .map(y => ({ year: y, value: valueAt(code, y) })),
+    }));
+
+    const xScale = d3.scaleLinear().domain([yrStart, yrEnd]).range([0, w]);
+    const yMax = d3.max(seriesData, sd => d3.max(sd.values, v => v.value)) || 1;
+    const yScale = d3.scaleLinear().domain([0, yMax / spec.d]).nice().range([h, 0]);
+
+    const svg = d3.select(el).append('svg')
+        .attr('width', el.clientWidth).attr('height', el.clientHeight);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Shade the years that are not settled history, before anything else.
+    const bandFor = (from, to) => {
+        const x0 = Math.max(0, xScale(from));
+        const x1 = Math.min(w, xScale(to));
+        return x1 > x0 ? { x: x0, w: x1 - x0 } : null;
+    };
+    const showVintage = proj !== null && yrEnd >= prov;
+    if (showVintage) {
+        // Two tints rather than in-chart text: at typical spans these bands are
+        // only ~20px wide, far too narrow to label legibly. The legend under the
+        // chart names both years instead.
+        [{ box: bandFor(prov - 0.5, prov + 0.5), fill: '#f4f6f8' },
+         { box: bandFor(prov + 0.5, proj + 0.5), fill: '#eaeef2' }].forEach(b => {
+            if (!b.box) return;
+            g.append('rect').attr('x', b.box.x).attr('y', 0)
+                .attr('width', b.box.w).attr('height', h).attr('fill', b.fill);
+        });
+    }
+
+    g.append('g').attr('class', 'grid')
+        .call(d3.axisLeft(yScale).ticks(6).tickSize(-w).tickFormat(''));
+    g.append('g').attr('class', 'axis').attr('transform', `translate(0,${h})`)
+        .call(d3.axisBottom(xScale).ticks(Math.min(8, yrEnd - yrStart))
+            .tickFormat(d3.format('d')));
+    g.append('g').attr('class', 'axis').call(d3.axisLeft(yScale).ticks(6));
+    g.append('text').attr('class', 'axis-title').attr('x', -margin.left + 2).attr('y', -11)
+        .text(spec.label);
+
+    const line = d3.line()
+        .defined(d => d.value !== null)
+        .x(d => xScale(d.year))
+        .y(d => yScale(d.value / spec.d));
+
+    seriesData.forEach(sd => {
+        // Solid through the provisional year, dashed into the forecast year, so
+        // the projected segment reads as an extrapolation rather than a value.
+        const solid = prov === null ? sd.values : sd.values.filter(d => d.year <= prov);
+        const fcast = prov === null ? [] : sd.values.filter(d => d.year >= prov);
+        if (solid.length)
+            g.append('path').datum(solid).attr('fill', 'none')
+                .attr('stroke', sd.color).attr('stroke-width', 2).attr('d', line);
+        if (fcast.length > 1)
+            g.append('path').datum(fcast).attr('fill', 'none')
+                .attr('stroke', sd.color).attr('stroke-width', 2)
+                .attr('stroke-dasharray', '4,3').attr('d', line);
+        const last = sd.values.find(d => d.year === proj);
+        if (last && last.value !== null)
+            g.append('circle').attr('cx', xScale(proj))
+                .attr('cy', yScale(last.value / spec.d)).attr('r', 3.5)
+                .attr('fill', '#fff').attr('stroke', sd.color).attr('stroke-width', 1.8);
+    });
+
+    drawEndLabels(g, w, h, seriesData.map(sd => {
+        const last = [...sd.values].reverse().find(d => d.value !== null);
+        return {
+            y: last ? yScale(last.value / spec.d) : h,
+            color: sd.color, text: sd.label,
+        };
+    }));
+
+    // hover readout
+    const focus = g.append('g').style('display', 'none');
+    focus.append('line').attr('y1', 0).attr('y2', h).attr('stroke', '#8b98a5')
+        .attr('stroke-width', 1).attr('stroke-dasharray', '2,2');
+    const dots = focus.append('g');
+    svg.append('rect').attr('x', margin.left).attr('y', margin.top)
+        .attr('width', Math.max(0, w)).attr('height', Math.max(0, h))
+        .attr('fill', 'none').attr('pointer-events', 'all')
+        .on('mouseenter', () => focus.style('display', null))
+        .on('mouseleave', () => { focus.style('display', 'none'); hideTip(); })
+        .on('mousemove', function (event) {
+            const [mx] = d3.pointer(event, g.node());
+            const yr = Math.round(xScale.invert(mx));
+            focus.select('line').attr('x1', xScale(yr)).attr('x2', xScale(yr));
+            const rows = seriesData.map(sd => ({
+                label: sd.label, color: sd.color, value: valueAt(sd.code, yr),
+            })).filter(r => r.value !== null).sort((a, b) => b.value - a.value);
+            dots.selectAll('circle').data(rows).join('circle')
+                .attr('cx', xScale(yr)).attr('cy', d => yScale(d.value / spec.d))
+                .attr('r', 3.5).attr('fill', d => d.color);
+            const st = yearStatus(yr);
+            showTip(event, `<div class="tt-name">${yr}${st ? ' · ' + STATUS_LABEL[st] : ''}</div>` +
+                rows.map(r =>
+                    `<div class="tt-val"><span style="color:${r.color}">■</span> ${r.label}: <b>${fmt(r.value, spec)}</b></div>`
+                ).join('') + `<div class="tt-note">${spec.label}</div>`);
+        });
+
+    if (showVintage) drawVintageLegend(prov, proj);
+    drawFoldedNote();
+}
+
+/**
+ * Series labels at the right edge of the axis, nudged apart where they collide.
+ * Shared by the line and column charts; never an inline legend box.
+ */
+function drawEndLabels(g, w, h, items) {
+    const labels = items.map(d => ({ ...d, origY: d.y })).sort((a, b) => a.y - b.y);
+    if (!labels.length) return;
+    const minGap = 14;
+    for (let it = 0; it < 40; it++) {
+        let moved = false;
+        for (let i = 1; i < labels.length; i++) {
+            const gap = labels[i].y - labels[i - 1].y;
+            if (gap < minGap) {
+                const push = (minGap - gap) / 2;
+                labels[i - 1].y -= push; labels[i].y += push; moved = true;
+            }
+        }
+        labels[0].y = Math.max(labels[0].y, 6);
+        labels[labels.length - 1].y = Math.min(labels[labels.length - 1].y, h);
+        if (!moved) break;
+    }
+    labels.forEach(({ y, origY, color, text }) => {
+        if (Math.abs(y - origY) > 4)
+            g.append('line').attr('x1', w + 4).attr('y1', origY).attr('x2', w + 4)
+                .attr('y2', y - 1).attr('stroke', color).attr('stroke-width', 0.75)
+                .attr('opacity', 0.45);
+        g.append('text').attr('class', 'line-label').attr('x', w + 8).attr('y', y + 4)
+            .attr('fill', color).text(text);
+    });
+}
+
+function promptForSelection() {
+    const single = currentView === 'columns';
+    const chosen = single ? (columnEntity ? 1 : 0) : selectedEntities.length;
+    d3.select('#viz').append('div').attr('class', 'no-data')
+        .text(chosen
+            ? `No ${metricName(currentMetric).toLowerCase()} reported for this selection.`
+            : single
+                ? 'Choose a country or region from the list on the left.'
+                : 'Choose one or more countries or regions from the list on the left.');
+}
+
+/**
+ * Explains gaps caused by USDA folding a member state into the EU total — the
+ * reason UK wheat, for instance, only begins in 2016.
+ */
+function drawFoldedNote() {
+    const folded = COMMODITY.eu_folded || {};
+    const shownCodes = currentView === 'columns'
+        ? (columnEntity ? [columnEntity] : []) : selectedEntities;
+    const [yrStart, yrEnd] = visibleRange();
+    const hits = [];
+    shownCodes.forEach(code => {
+        (folded[code] || []).forEach(([a, b]) => {
+            if (b < yrStart || a > yrEnd) return;   // not on screen
+            hits.push(`${entityName(code)} ${a === b ? `in ${a}` : `from ${a} to ${b}`}`);
+        });
+    });
+    if (!hits.length) return;
+    const shown = hits.slice(0, 3).join('; ');
+    const more = hits.length > 3 ? `, and ${hits.length - 3} more` : '';
+    d3.select('#legend-holder').append('div').attr('class', 'legend-note')
+        .text(`Included in the European Union total, so not reported separately: ${shown}${more}.`);
+}
+
+/** Names the provisional and forecast years under the line chart. */
+function drawVintageLegend(prov, proj) {
+    const holder = d3.select('#legend-holder');
+    const row = holder.append('div').attr('class', 'vintage-legend');
+
+    const prv = row.append('span').attr('class', 'vintage-item');
+    prv.append('span').attr('class', 'vintage-swatch').style('background', '#f4f6f8');
+    prv.append('span').text(`${prov} provisional`);
+
+    const fct = row.append('span').attr('class', 'vintage-item');
+    fct.append('span').attr('class', 'vintage-swatch').style('background', '#eaeef2');
+    fct.append('span').attr('class', 'vintage-dash');
+    fct.append('span').attr('class', 'vintage-dot');
+    fct.append('span').text(`${proj} USDA forecast`);
+}
+
+/** Round v up to 1, 2, 5 x a power of ten, so legend breaks stay readable. */
+function niceRound(v) {
+    if (!(v > 0)) return 0;
+    const mag = Math.pow(10, Math.floor(Math.log10(v)));
+    const f = v / mag;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * mag;
+}
+
+/**
+ * Bin edges for the choropleth. Production and area are heavily skewed, so cut
+ * on quantiles, then round each break to a readable number and drop any that
+ * collapse into its neighbour.
+ */
+function niceCuts(sorted, n) {
+    const out = [];
+    for (let i = 1; i < n; i++) {
+        const r = niceRound(d3.quantileSorted(sorted, i / n));
+        if (r > 0 && (!out.length || r > out[out.length - 1])) out.push(r);
+    }
+    return out.length ? out : [niceRound(sorted[sorted.length - 1] / 2)];
+}
+
+// ---- map ------------------------------------------------------------------
+function drawMap() {
+    const el = document.getElementById('viz');
+    const codes = reportingCodes();
+    const vals = codes.map(c => valueAt(c, currentYear)).filter(v => v !== null && v > 0);
+    if (!vals.length) return noData();
+
+    const spec = unitSpec(COMMODITY.units[currentMetric], d3.max(vals));
+    const sorted = vals.slice().sort(d3.ascending);
+    const cuts = niceCuts(sorted, RAMPS[currentMetric].length);
+    const ramp = d3.quantize(d3.interpolateRgbBasis(RAMPS[currentMetric]), cuts.length + 1);
+    const color = d3.scaleThreshold().domain(cuts).range(ramp);
+
+    const byMapId = new Map();
+    codes.forEach(c => {
+        const e = ENT.get(c);
+        if (e && e.map_id) byMapId.set(e.map_id, { code: c, value: valueAt(c, currentYear) });
+    });
+    const euValue = valueAt('E4', currentYear);
+    const euIds = new Set(euValue !== null ? INDEX.eu_member_map_ids : []);
+    const selectedIds = new Set(selectedEntities
+        .map(c => (ENT.get(c) || {}).map_id).filter(Boolean));
+
+    const w = el.clientWidth, h = el.clientHeight;
+    const svg = d3.select(el).append('svg').attr('width', w).attr('height', h);
+    const features = topojson.feature(TOPO, TOPO.objects.countries).features
+        .filter(f => f.id !== '010');   // drop Antarctica
+    const projection = d3.geoNaturalEarth1().fitSize([w, h - 6], {
+        type: 'FeatureCollection', features });
+    const path = d3.geoPath(projection);
+
+    // Hatch for EU members whose output USDA reports only as an EU total.
+    const defs = svg.append('defs');
+    const pat = defs.append('pattern').attr('id', 'eu-hatch')
+        .attr('width', 5).attr('height', 5).attr('patternUnits', 'userSpaceOnUse')
+        .attr('patternTransform', 'rotate(45)');
+    pat.append('rect').attr('width', 5).attr('height', 5).attr('fill', '#dbe3ea');
+    pat.append('line').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 5)
+        .attr('stroke', '#9aa8b5').attr('stroke-width', 1.4);
+
+    const paths = svg.append('g').selectAll('path').data(features).enter().append('path')
+        .attr('d', path)
+        .attr('fill', f => {
+            const hit = byMapId.get(f.id);
+            if (hit && hit.value !== null) return color(hit.value);
+            if (euIds.has(f.id)) return 'url(#eu-hatch)';
+            return '#f0f3f6';
+        })
+        .attr('stroke', f => selectedIds.has(f.id) ? '#1d2934' : '#fff')
+        .attr('stroke-width', f => selectedIds.has(f.id) ? 1.4 : 0.5)
+        .style('cursor', f => (byMapId.has(f.id) || euIds.has(f.id)) ? 'pointer' : 'default')
+        .on('mousemove', function (event, f) {
+            const hit = byMapId.get(f.id);
+            const st = yearStatus(currentYear);
+            const note = st ? `<div class="tt-note">${STATUS_LABEL[st]} for ${currentYear}</div>` : '';
+            if (hit) {
+                showTip(event, `<div class="tt-name">${entityName(hit.code)}</div>` +
+                    `<div class="tt-val">${fmt(hit.value, spec)} ${spec.label}</div>` + note);
+            } else if (euIds.has(f.id)) {
+                showTip(event, `<div class="tt-name">${f.properties.name}</div>` +
+                    `<div class="tt-val">${fmt(euValue, spec)} ${spec.label}</div>` +
+                    `<div class="tt-note">Reported by USDA only as a European Union total</div>`);
+            } else {
+                showTip(event, `<div class="tt-name">${f.properties.name}</div>` +
+                    `<div class="tt-note">No data</div>`);
+            }
+        })
+        .on('mouseleave', hideTip)
+        // Clicking a country takes you straight to its line chart.
+        .on('click', function (event, f) {
+            const hit = byMapId.get(f.id);
+            const code = hit ? hit.code : (euIds.has(f.id) ? 'E4' : null);
+            if (!code) return;
+            if (!selectedEntities.includes(code)) selectedEntities.push(code);
+            columnEntity = code;
+            hideTip();
+            setView('chart');
+        });
+
+    /** Emphasise the countries in one legend bin, or clear with null. */
+    function highlightBin(i) {
+        if (i === null) {
+            paths.attr('opacity', 1);
+            return;
+        }
+        const lo = i === 0 ? -Infinity : cuts[i - 1];
+        const hi = i < cuts.length ? cuts[i] : Infinity;
+        paths.attr('opacity', f => {
+            const hit = byMapId.get(f.id);
+            const v = hit ? hit.value : (euIds.has(f.id) ? euValue : null);
+            if (v === null || v === undefined) return 0.25;
+            return (v >= lo && v < hi) ? 1 : 0.15;
+        });
+    }
+
+    drawLegend(cuts, ramp, spec, euValue !== null, highlightBin);
+}
+
+function drawLegend(cuts, ramp, spec, showEuNote, onHoverBin) {
+    const holder = d3.select('#legend-holder');
+    const leg = holder.append('div').attr('class', 'legend');
+    ramp.forEach((c, i) => {
+        const item = leg.append('div').attr('class', 'legend-item is-bin')
+            .on('mouseenter', () => onHoverBin(i))
+            .on('mouseleave', () => onHoverBin(null));
+        item.append('div').attr('class', 'legend-swatch').style('background', c);
+        item.append('div').attr('class', 'legend-tick')
+            .text(i === 0 ? '0' : fmt(cuts[i - 1], spec));
+    });
+    leg.append('div').attr('class', 'legend-item legend-unit')
+        .append('div').attr('class', 'legend-tick').style('margin-top', '0')
+        .text(spec.label);
+    if (showEuNote) {
+        const note = holder.append('div').attr('class', 'legend-note');
+        note.append('span').style('width', '14px').style('height', '10px')
+            .style('display', 'inline-block')
+            .style('background', 'repeating-linear-gradient(45deg,#dbe3ea 0 2px,#9aa8b5 2px 3px)');
+        note.append('span').text('Reported by USDA as a single European Union total');
+    }
+}
+
+// ---- time-series columns --------------------------------------------------
+// One entity at a time: a column chart of many grouped series is unreadable over
+// six decades, and a single series is what the view is actually good at.
+function drawColumns() {
+    const el = document.getElementById('viz');
+    const code = columnEntity && seriesFor(columnEntity) ? columnEntity : null;
+    if (!code) return promptForSelection();
+
+    const margin = { top: 26, right: 132, bottom: 34, left: 58 };
+    const w = el.clientWidth - margin.left - margin.right;
+    const h = el.clientHeight - margin.top - margin.bottom;
+
+    const [yrStart, yrEnd] = visibleRange();
+    const spec = unitSpec(COMMODITY.units[currentMetric],
+                          maxOf([code], [yrStart, yrEnd]));
+    const years = COMMODITY.years.filter(y => y >= yrStart && y <= yrEnd);
+    const prov = provisionalYear(), proj = projectionYear();
+    const label = entityName(code), color = SERIES_COLORS[0];
+
+    const x0 = d3.scaleBand().domain(years).range([0, w])
+        .paddingInner(0.18).paddingOuter(0.08);
+    const yMax = d3.max(years, y => valueAt(code, y)) || 1;
+    const yScale = d3.scaleLinear().domain([0, yMax / spec.d]).nice().range([h, 0]);
+
+    const svg = d3.select(el).append('svg')
+        .attr('width', el.clientWidth).attr('height', el.clientHeight);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Same vintage shading as the line chart, behind the columns.
+    const showVintage = proj !== null && yrEnd >= prov;
+    if (showVintage)
+        [[prov, '#f4f6f8'], [proj, '#eaeef2']].forEach(([yr, fill]) => {
+            if (x0(yr) === undefined) return;
+            g.append('rect').attr('x', x0(yr) - x0.step() * 0.09).attr('y', 0)
+                .attr('width', x0.step()).attr('height', h).attr('fill', fill);
+        });
+
+    g.append('g').attr('class', 'grid')
+        .call(d3.axisLeft(yScale).ticks(6).tickSize(-w).tickFormat(''));
+
+    // Thin the year ticks so labels never collide.
+    const step = Math.max(1, Math.ceil(years.length / Math.max(2, Math.floor(w / 52))));
+    g.append('g').attr('class', 'axis').attr('transform', `translate(0,${h})`)
+        .call(d3.axisBottom(x0).tickSize(4)
+            .tickValues(years.filter((y, i) => i % step === 0)));
+    g.append('g').attr('class', 'axis').call(d3.axisLeft(yScale).ticks(6));
+    g.append('text').attr('class', 'axis-title').attr('x', -margin.left + 2).attr('y', -11)
+        .text(spec.label);
+
+    const cols = years.map(y => ({ year: y, value: valueAt(code, y) }))
+        .filter(d => d.value !== null);
+    g.selectAll(null).data(cols).enter().append('rect')
+        .attr('x', d => x0(d.year))
+        .attr('y', d => yScale(d.value / spec.d))
+        .attr('width', x0.bandwidth())
+        .attr('height', d => Math.max(0, h - yScale(d.value / spec.d)))
+        .attr('fill', color)
+        // The forecast column is drawn hollow with a dashed edge, matching the
+        // dashed line and open marker on the line chart.
+        .attr('fill-opacity', d => d.year === proj ? 0.25 : 1)
+        .attr('stroke', d => d.year === proj ? color : 'none')
+        .attr('stroke-width', d => d.year === proj ? 1.2 : 0)
+        .attr('stroke-dasharray', d => d.year === proj ? '3,2' : null)
+        .on('mousemove', (event, d) => {
+            const st = yearStatus(d.year);
+            showTip(event, `<div class="tt-name">${label}</div>` +
+                `<div class="tt-val">${d.year}: <b>${fmt(d.value, spec)}</b></div>` +
+                `<div class="tt-note">${spec.label}` +
+                (st ? ` · ${STATUS_LABEL[st]}` : '') + `</div>`);
+        })
+        .on('mouseleave', hideTip);
+
+    // House style: the named series gets a right-edge label, never a legend box.
+    const lastYear = [...years].reverse().find(y => valueAt(code, y) !== null);
+    const lastVal = lastYear === undefined ? null : valueAt(code, lastYear);
+    drawEndLabels(g, w, h, [{
+        y: lastVal === null ? h : yScale(lastVal / spec.d), color, text: label,
+    }]);
+
+    if (showVintage) drawVintageLegend(prov, proj);
+    drawFoldedNote();
+}
+
+// ---- table ----------------------------------------------------------------
+function drawTable() {
+    const el = document.getElementById('viz');
+    const sel = new Set(selectedEntities);
+    // Every entity with data for this food and metric, World and continents
+    // included — the table is the full reference view, not a filtered one.
+    const codes = Object.keys(COMMODITY.series)
+        .filter(c => COMMODITY.series[c][currentMetric]);
+    const world = valueAt('@World', currentYear);
+    const prevYear = currentYear - 10;
+    let rows = codes.map(c => {
+        const v = valueAt(c, currentYear), p = valueAt(c, prevYear);
+        const kind = c.startsWith('@') ? 'aggregate' : (ENT.get(c) || {}).kind;
+        return {
+            code: c, name: entityName(c), value: v,
+            agg: kind === 'aggregate' || kind === 'region',
+            share: (world && v !== null) ? v / world * 100 : null,
+            change: (p !== null && p > 0 && v !== null) ? (v - p) / p * 100 : null,
+        };
+    }).filter(r => r.value !== null);
+    if (!rows.length) return noData();
+
+    const spec = unitSpec(COMMODITY.units[currentMetric], d3.max(rows, r => r.value));
+    const cols = [
+        { key: 'name', label: 'Country / region', fmt: r => r.name, cls: r => r.agg ? 'agg' : null },
+        { key: 'value', label: `${metricName(currentMetric)} (${spec.label})`,
+          fmt: r => fmt(r.value, spec) },
+        { key: 'share', label: '% of world', fmt: r => r.share === null ? '–' : r.share.toFixed(1) + '%' },
+        { key: 'change', label: `Change since ${prevYear}`, fmt: r => r.change === null ? '–'
+            : (r.change > 0 ? '+' : '') + r.change.toFixed(0) + '%' },
+    ];
+    rows.sort((a, b) => {
+        const k = tableSort.key;
+        const av = a[k], bv = b[k];
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * tableSort.dir;
+    });
+
+    const scroll = d3.select(el).append('div').attr('class', 'tbl-scroll');
+    const table = scroll.append('table');
+    table.append('thead').append('tr').selectAll('th').data(cols).enter().append('th')
+        .attr('class', d => d.key === tableSort.key ? 'sorted' : null)
+        .text(d => d.label + (d.key === tableSort.key ? (tableSort.dir === 1 ? ' ▲' : ' ▼') : ''))
+        .on('click', (event, d) => {
+            if (tableSort.key === d.key) tableSort.dir *= -1;
+            else tableSort = { key: d.key, dir: d.key === 'name' ? 1 : -1 };
+            render();
+        });
+    const tb = table.append('tbody');
+    tb.selectAll('tr').data(rows).enter().append('tr')
+        .attr('class', r => sel.has(r.code) ? 'is-selected' : null)
+        .selectAll('td')
+        .data(r => cols.map(c => ({ text: c.fmt(r), cls: c.cls ? c.cls(r) : null })))
+        .enter().append('td')
+        .attr('class', d => d.cls).text(d => d.text);
+}
+
+function noData() {
+    d3.select('#viz').append('div').attr('class', 'no-data')
+        .text(`No ${metricName(currentMetric).toLowerCase()} data for this selection.`);
+}
+
+// ---------------------------------------------------------------------------
+// tooltip
+// ---------------------------------------------------------------------------
+const tip = d3.select('#tooltip');
+function showTip(event, html) {
+    tip.html(html).style('opacity', 1);
+    const pad = 14, node = tip.node();
+    let x = event.pageX + pad, y = event.pageY + pad;
+    if (x + node.offsetWidth > window.innerWidth - 8) x = event.pageX - node.offsetWidth - pad;
+    if (y + node.offsetHeight > window.scrollY + window.innerHeight - 8) y = event.pageY - node.offsetHeight - pad;
+    tip.style('left', x + 'px').style('top', y + 'px');
+}
+function hideTip() { tip.style('opacity', 0); }
+
+// ---------------------------------------------------------------------------
+// year slider + play
+// ---------------------------------------------------------------------------
+function redrawYearView() {
+    d3.select('#viz').selectAll('*').remove();
+    d3.select('#legend-holder').selectAll('*').remove();
+    updateTitle();
+    const st = yearStatus(currentYear);
+    d3.select('#year-badge').text(st ? STATUS_LABEL[st] : '');
+    if (currentView === 'map') drawMap(); else drawTable();
+}
+
+document.getElementById('year-range').addEventListener('input', function () {
+    currentYear = +this.value;
+    d3.select('#year-label').text(currentYear);
+    redrawYearView();
+    updateURL();
+});
+
+document.getElementById('play').addEventListener('click', function () {
+    if (playTimer) {
+        clearInterval(playTimer); playTimer = null; this.textContent = '▶'; return;
+    }
+    const ys = COMMODITY._dataYears;
+    this.textContent = '❚❚';
+    if (currentYear >= ys[ys.length - 1]) currentYear = ys[0];
+    playTimer = setInterval(() => {
+        const i = ys.indexOf(currentYear);
+        if (i >= ys.length - 1) {
+            clearInterval(playTimer); playTimer = null;
+            document.getElementById('play').textContent = '▶'; return;
+        }
+        currentYear = ys[i + 1];
+        d3.select('#year-range').property('value', currentYear);
+        d3.select('#year-label').text(currentYear);
+        redrawYearView();
+        updateURL();
+    }, 380);
+});
+
+// ---------------------------------------------------------------------------
+// PNG export
+//
+// The chart is rebuilt as one standalone SVG — title, subtitle, plot, legend and
+// footer, and nothing else — then rasterised at 3x. A standalone SVG cannot reach
+// Google Fonts, so data/fonts.css (the latin subsets, base64) is inlined into it;
+// without that, every label would fall back to a generic sans-serif.
+// ---------------------------------------------------------------------------
+const EXPORT_SCALE = 3;
+const EXPORT_PAD = 28;
+let FONT_CSS = null;
+
+// The page's chart styles, which a cloned SVG would otherwise lose.
+const EXPORT_CSS = `
+text { font-family: 'Lato', sans-serif; }
+.axis text { font-size: 11px; fill: #6b7c8d; }
+.axis .domain { display: none; }
+.axis line { stroke: #ccd4dc; }
+.grid line { stroke: #ccc; stroke-opacity: 0.7; stroke-dasharray: 3,3; stroke-width: 1px; }
+.grid .domain { display: none; }
+.line-label { font-size: 12px; font-weight: 700; }
+.bar-val { font-size: 11px; fill: #4a5a6a; }
+.axis-title { font-size: 11px; fill: #8b98a5; }
+.x-title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 22px; fill: #1d2934; }
+.x-sub { font-size: 13px; fill: #5b6b7c; }
+.x-foot { font-size: 11px; fill: #5b6b7c; }
+.x-foot-link { font-size: 11px; fill: #46566a; }
+.x-tick { font-size: 10px; fill: #6b7c8d; }
+`;
+
+async function loadFontCss() {
+    if (FONT_CSS !== null) return FONT_CSS;
+    try {
+        const r = await fetch('data/fonts.css');
+        FONT_CSS = r.ok ? await r.text() : '';
+    } catch (e) {
+        FONT_CSS = '';       // export still works, just with fallback fonts
+    }
+    return FONT_CSS;
+}
+
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** Measure text the same way the browser will, for wrapping. */
+const measurer = document.createElement('canvas').getContext('2d');
+function wrapText(text, font, maxW) {
+    measurer.font = font;
+    const out = [];
+    let line = '';
+    text.split(/\s+/).filter(Boolean).forEach(word => {
+        const next = line ? line + ' ' + word : word;
+        if (measurer.measureText(next).width > maxW && line) { out.push(line); line = word; }
+        else line = next;
+    });
+    if (line) out.push(line);
+    return out;
+}
+
+/**
+ * Rebuild the on-screen legend as SVG. Read from the DOM rather than re-derived,
+ * so the export tracks whatever the legend actually shows.
+ */
+function legendSvg(x, y, width) {
+    const parts = [];
+    let cy = y;
+    const holder = document.getElementById('legend-holder');
+
+    const bins = holder.querySelector('.legend');
+    if (bins) {
+        const items = [...bins.querySelectorAll('.legend-item')];
+        const swatches = items.filter(el => el.querySelector('.legend-swatch'));
+        const unit = items.find(el => !el.querySelector('.legend-swatch'));
+        const sw = 42, sh = 10;
+        const totalW = swatches.length * sw;
+        let sx = x + Math.max(0, (width - totalW) / 2);
+        const left = sx;
+        swatches.forEach(el => {
+            const fill = getComputedStyle(el.querySelector('.legend-swatch')).backgroundColor;
+            parts.push(`<rect x="${sx}" y="${cy}" width="${sw}" height="${sh}" fill="${fill}"/>`);
+            const tick = el.querySelector('.legend-tick');
+            if (tick) parts.push(
+                `<text class="x-tick" x="${sx}" y="${cy + sh + 11}">${esc(tick.textContent)}</text>`);
+            sx += sw;
+        });
+        if (unit) parts.push(
+            `<text class="x-tick" x="${sx + 10}" y="${cy + sh}">${esc(unit.textContent)}</text>`);
+        cy += sh + 16;
+        parts._left = left;
+    }
+
+    const vintage = holder.querySelector('.vintage-legend');
+    if (vintage) {
+        let vx = x;
+        [...vintage.querySelectorAll('.vintage-item')].forEach(item => {
+            const sw = item.querySelector('.vintage-swatch');
+            if (sw) {
+                const fill = getComputedStyle(sw).backgroundColor;
+                parts.push(`<rect x="${vx}" y="${cy}" width="16" height="11" fill="${fill}" `
+                    + `stroke="#e0e6eb" stroke-width="1"/>`);
+                vx += 21;
+            }
+            if (item.querySelector('.vintage-dash')) {
+                parts.push(`<line x1="${vx}" y1="${cy + 5.5}" x2="${vx + 18}" y2="${cy + 5.5}" `
+                    + `stroke="#6b7c8d" stroke-width="2" stroke-dasharray="4,3"/>`);
+                vx += 20;
+            }
+            if (item.querySelector('.vintage-dot')) {
+                parts.push(`<circle cx="${vx + 1}" cy="${cy + 5.5}" r="3.5" fill="#fff" `
+                    + `stroke="#6b7c8d" stroke-width="1.8"/>`);
+                vx += 9;
+            }
+            const label = [...item.childNodes]
+                .filter(nd => nd.nodeType === 3 || !nd.className)
+                .map(nd => nd.textContent).join('').trim()
+                || item.lastChild.textContent.trim();
+            measurer.font = "400 11px Lato, sans-serif";
+            parts.push(`<text class="x-foot" x="${vx + 4}" y="${cy + 9}">${esc(label)}</text>`);
+            vx += measurer.measureText(label).width + 22;
+        });
+        cy += 20;
+    }
+
+    holder.querySelectorAll('.legend-note').forEach(note => {
+        // Some notes carry a swatch as their visual key (the EU hatch); keep it.
+        const key = note.querySelector('span[style*="gradient"]');
+        let tx = x;
+        if (key) {
+            parts.push(`<rect x="${x}" y="${cy}" width="14" height="10" fill="url(#x-hatch)"/>`);
+            tx = x + 20;
+        }
+        const txt = note.textContent.trim();
+        wrapText(txt, "400 11px Lato, sans-serif", width - (tx - x) - 20).forEach(line => {
+            parts.push(`<text class="x-foot" x="${tx}" y="${cy + 9}">${esc(line)}</text>`);
+            cy += 15;
+        });
+        cy += 3;
+    });
+
+    return { svg: parts.join(''), height: cy - y };
+}
+
+function buildExportSvg(fontCss) {
+    const src = document.querySelector('#viz svg');
+    if (!src) return null;
+
+    const chartW = +src.getAttribute('width');
+    const chartH = +src.getAttribute('height');
+    const width = chartW + EXPORT_PAD * 2;
+    const inner = width - EXPORT_PAD * 2;
+
+    const title = document.getElementById('chart-title').textContent;
+    const subtitle = document.getElementById('subtitle').textContent;
+
+    let y = EXPORT_PAD + 18;
+    const head = [`<text class="x-title" x="${EXPORT_PAD}" y="${y}">${esc(title)}</text>`];
+    y += 20;
+    head.push(`<text class="x-sub" x="${EXPORT_PAD}" y="${y}">${esc(subtitle)}</text>`);
+    y += 18;
+
+    // The plot itself, cloned so nothing on the page is disturbed.
+    const clone = src.cloneNode(true);
+    clone.removeAttribute('width');
+    clone.removeAttribute('height');
+    // The heavy outline marks the current selection — interactive state with no
+    // meaning in a static image, and nothing on the export explains it.
+    clone.querySelectorAll('path[stroke="#1d2934"]').forEach(el => {
+        el.setAttribute('stroke', '#fff');
+        el.setAttribute('stroke-width', '0.5');
+    });
+    const chartTop = y;
+    const plot = `<g transform="translate(${EXPORT_PAD},${chartTop})">`
+        + `<svg width="${chartW}" height="${chartH}" overflow="visible">${clone.innerHTML}</svg></g>`;
+    y = chartTop + chartH + 10;
+
+    const leg = legendSvg(EXPORT_PAD, y, inner);
+    y += leg.height + 12;
+
+    // Footer, mirroring the page: source line, blank line, note, last updated.
+    const foot = [];
+    foot.push(`<line x1="${EXPORT_PAD}" y1="${y}" x2="${width - EXPORT_PAD}" y2="${y}" `
+        + `stroke="#e7ecf1" stroke-width="1"/>`);
+    y += 18;
+    const srcText = document.querySelector('.foot-source').textContent.trim()
+        .replace(/\s+/g, ' ');
+    wrapText(srcText, "400 11px Lato, sans-serif", inner).forEach(line => {
+        foot.push(`<text class="x-foot-link" x="${EXPORT_PAD}" y="${y}">${esc(line)}</text>`);
+        y += 16;
+    });
+    y += 6;
+    const noteText = document.getElementById('vintage-note').textContent.trim();
+    wrapText(noteText, "400 11px Lato, sans-serif", inner).forEach(line => {
+        foot.push(`<text class="x-foot" x="${EXPORT_PAD}" y="${y}">${esc(line)}</text>`);
+        y += 16;
+    });
+    const upd = document.getElementById('updated-note').textContent.trim();
+    if (upd) {
+        foot.push(`<text class="x-foot" x="${EXPORT_PAD}" y="${y}">${esc(upd)}</text>`);
+        y += 16;
+    }
+    const height = y + EXPORT_PAD - 12;
+
+    return {
+        width, height,
+        markup: `<svg xmlns="http://www.w3.org/2000/svg" `
+            + `xmlns:xlink="http://www.w3.org/1999/xlink" `
+            + `width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`
+            + `<style>${fontCss}${EXPORT_CSS}</style>`
+            + `<defs><pattern id="x-hatch" width="5" height="5" `
+            + `patternUnits="userSpaceOnUse" patternTransform="rotate(45)">`
+            + `<rect width="5" height="5" fill="#dbe3ea"/>`
+            + `<line x1="0" y1="0" x2="0" y2="5" stroke="#9aa8b5" stroke-width="1.4"/>`
+            + `</pattern></defs>`
+            + `<rect width="${width}" height="${height}" fill="#ffffff"/>`
+            + head.join('') + plot + leg.svg + foot.join('')
+            + `</svg>`,
+    };
+}
+
+function exportFilename() {
+    const bits = [currentFood, currentMetric];
+    bits.push(isTimeSeries() ? `${visibleRange()[0]}-${visibleRange()[1]}` : currentYear);
+    return `usda-${bits.join('-')}.png`;
+}
+
+async function downloadPng() {
+    const btn = document.getElementById('dl-btn');
+    const label = document.getElementById('dl-label');
+    const original = label.textContent;
+    btn.disabled = true;
+    label.textContent = 'Preparing…';
+    try {
+        const built = buildExportSvg(await loadFontCss());
+        if (!built) throw new Error('nothing to export');
+
+        const blob = new Blob([built.markup], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = () => reject(new Error('could not rasterise the chart'));
+            img.src = url;
+        });
+        // Give the embedded fonts a moment to be applied before painting.
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(built.width * EXPORT_SCALE);
+        canvas.height = Math.round(built.height * EXPORT_SCALE);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(EXPORT_SCALE, 0, 0, EXPORT_SCALE, 0, 0);
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+
+        const out = await new Promise(res => canvas.toBlob(res, 'image/png'));
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(out);
+        a.download = exportFilename();
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        label.textContent = 'Downloaded';
+        setTimeout(() => { label.textContent = original; }, 1600);
+    } catch (err) {
+        console.warn('PNG export failed:', err);
+        label.textContent = 'Export failed';
+        setTimeout(() => { label.textContent = original; }, 2200);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// boot
+// ---------------------------------------------------------------------------
+async function loadCommodity() {
+    if (!CACHE.has(currentFood)) {
+        CACHE.set(currentFood, await d3.json(`data/commodity/${currentFood}.json`));
+    }
+    COMMODITY = CACHE.get(currentFood);
+}
+
+async function boot() {
+    [INDEX, TOPO] = await Promise.all([
+        d3.json('data/index.json'), d3.json('data/countries-110m.json'),
+    ]);
+    INDEX.entities.forEach(e => ENT.set(e.code, e));
+    currentFood = 'wheat';
+    buildMetricSelect(); initFoodCombo(); initEntityControl(); initTimeRange();
+    d3.selectAll('.tab').on('click', function () { setView(this.dataset.view); });
+    document.getElementById('dl-btn').addEventListener('click', downloadPng);
+    const hadEntities = new URLSearchParams(location.search).has('entities');
+    restoreFromURL();
+    d3.selectAll('.tab').classed('active', function () { return this.dataset.view === currentView; });
+    await loadCommodity();
+    syncMetricSelect();
+    if (!hadEntities) selectedEntities = defaultCodes();
+    buildFoodList(''); buildEntityList('');
+    render();
+    updateURL();
+}
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(render, 150);
+});
+
+boot();
+</script>
+</body>
+</html>
