@@ -288,6 +288,12 @@ stop the page writing to the URL.
 
 ## Licensing and attribution
 
+This work is released under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — see `LICENSE`. You are
+free to share and adapt it, including commercially, provided you give credit.
+
+Third-party components keep their own terms:
+
 - **Data**: USDA Foreign Agricultural Service, Production, Supply and Distribution
   (PSD). A work of the US federal government, so not subject to copyright in the
   United States. Please cite USDA FAS when reusing it.
