@@ -167,7 +167,7 @@ It also reports two caveats that are properties of the source rather than defect
 With the server running:
 
 ```bash
-uv run --with playwright python scripts/check_regressions.py   # 112 assertions
+uv run --with playwright python scripts/check_regressions.py   # 130 assertions
 uv run --with playwright python scripts/check_views.py         # screenshots → scripts/_shots/
 ```
 
