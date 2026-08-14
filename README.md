@@ -220,7 +220,7 @@ download, so it costs nothing on page load.
 
 ## Coverage
 
-All 60 commodities report Production. Only 18 report Yield and 17 report Area
+All 60 commodities report Production. Only 18 report Yield and 16 report Area
 harvested — these are the field crops (grains, oilseeds, cotton, oil palm).
 The metric dropdown greys out metrics a commodity does not report and falls
 back to Production.
