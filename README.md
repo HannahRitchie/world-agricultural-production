@@ -108,9 +108,17 @@ uv run scripts/make_static_chart.py                        # lines, 1960-2025
 uv run scripts/make_static_chart.py --kind column --start 2000
 ```
 
-The headline numbers in the subtitle are computed from the data for whichever span
-is requested, and switch between percentages and multiples by magnitude — so they
-cannot drift out of step with the chart or with a monthly rebuild.
+Each crop carries its own hue, held constant down its column so the yield and
+production panels read as a pair. Four hues is the interesting constraint: small
+multiples are an all-pairs form, and the reference palette's first four slots fail
+it (yellow meets orange). Blue/orange/aqua/violet clears every hard gate — worst
+CVD dE 9.2, worst normal-vision 16.3 — and was picked by running the validator, not
+by eye. Aqua carries a contrast warning, so values and titles are set in text ink
+rather than the series colour, which is the required relief.
+
+The forecast year is drawn as an open dashed bar (or dashed line with a hollow
+marker), matching the explorer's treatment. Which year that is comes from
+`year_projection` in the commodity files, so it follows each monthly release.
 
 Each panel holds a single series, so no categorical palette is needed: the column
 headings carry identity and one validated ink serves every panel. y-axes are shared

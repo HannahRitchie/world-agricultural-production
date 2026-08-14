@@ -36,19 +36,20 @@ DATA = ROOT / "data"
 OUT_DIR = ROOT / "static-charts"
 FONT_CACHE = Path(__file__).parent / "_fonts"
 
+# Hue per crop, held constant down each column so the yield panel and the
+# production panel for a crop read as a pair. This set passes the all-pairs
+# gates that small multiples require (worst CVD dE 9.2, normal-vision 16.3);
+# the reference palette's first four do not, because yellow meets orange.
 CROPS = [
-    ("corn", "Corn (maize)"),
-    ("wheat", "Wheat"),
-    ("rice-milled", "Rice"),
-    ("oilseed-soybean", "Soybeans"),
+    ("corn", "Corn (maize)", "#2a78d6"),
+    ("wheat", "Wheat", "#eb6834"),
+    ("rice-milled", "Rice", "#1baf7a"),
+    ("oilseed-soybean", "Soybeans", "#4a3aa7"),
 ]
 
-# The 2026 USDA forecast is excluded; 2025 is a provisional estimate.
-YEAR_MAX = 2025
+# The provisional and forecast years come from the build, not hardcoded, so they
+# follow each monthly USDA release.
 
-# Single validated ink (lightness band, chroma floor and contrast all pass for
-# the light surface). Colour carries no information here, so one hue is used.
-INK = "#2a6ba8"
 TEXT = "#1d2934"
 MUTED = "#5b6b7c"
 FAINT = "#8b98a5"
@@ -109,33 +110,16 @@ def install_fonts() -> tuple[str, str]:
     return display, body
 
 
-def fmt_change(first: float, last: float) -> str:
-    """A ratio as a multiple when large, a percentage when modest."""
-    r = last / first
-    return f"{r:.1f}\u00d7" if r >= 3 else f"+{(r - 1) * 100:.0f}%"
-
-
-def yield_phrase(lo: float, hi: float, year: int) -> str:
-    """Phrase a ratio range so the preposition matches the unit used."""
-    if hi >= 3:                                   # multiples: "3.2x their 1960 level"
-        a, b = f"{lo:.1f}\u00d7", f"{hi:.1f}\u00d7"
-        both = a if a == b else f"{a} to {b}"
-        return f"Yields are {both} their {year} level"
-    a, b = f"{(lo - 1) * 100:.0f}%", f"{(hi - 1) * 100:.0f}%"
-    both = a if a == b else f"{a} to {b}"
-    return f"Yields are {both} above their {year} level"
-
-
 def load(slug: str, year_min: int) -> tuple[dict, dict]:
-    d = json.loads((DATA / f"{slug}.json").read_text()) if slug.endswith(".json") \
-        else json.loads((DATA / "commodity" / f"{slug}.json").read_text())
+    d = json.loads((DATA / "commodity" / f"{slug}.json").read_text())
     world = d["series"]["@World"]
     idx = {y: i for i, y in enumerate(d["years"])}
     out = {}
     for metric in ("yield", "production"):
         series = world.get(metric) or []
         pts = [(y, series[idx[y]]) for y in d["years"]
-               if year_min <= y <= YEAR_MAX and series and series[idx[y]] is not None]
+               if year_min <= y <= d["year_projection"]
+               and series and series[idx[y]] is not None]
         out[metric] = pts
     return d, out
 
@@ -160,7 +144,11 @@ def main() -> None:
         "svg.fonttype": "none",
     })
 
-    data = {slug: load(slug, year_min) for slug, _ in CROPS}
+    data = {slug: load(slug, year_min) for slug, _, _ in CROPS}
+    meta = data[CROPS[0][0]][0]
+    prov, proj = meta["year_provisional"], meta["year_projection"]
+    if {(d["year_provisional"], d["year_projection"]) for d, _ in data.values()} != {(prov, proj)}:
+        raise SystemExit("crops disagree on the provisional/forecast years")
 
     fig, axes = plt.subplots(
         2, 4, figsize=(13.2, 6.9), dpi=190,
@@ -174,13 +162,13 @@ def main() -> None:
     # Shared y-limit per row so the four crops compare directly.
     limits = {}
     for metric, _, _ in rows:
-        top = max(v for slug, _ in CROPS for _, v in data[slug][1][metric])
+        top = max(v for slug, _, _ in CROPS for _, v in data[slug][1][metric])
         if metric == "production":
             top /= 1000.0
         limits[metric] = top * 1.12
 
     for r, (metric, row_label, unit) in enumerate(rows):
-        for c, (slug, label) in enumerate(CROPS):
+        for c, (slug, label, hue) in enumerate(CROPS):
             ax = axes[r][c]
             pts = data[slug][1][metric]
             xs = [y for y, _ in pts]
@@ -194,29 +182,44 @@ def main() -> None:
             ax.spines["bottom"].set_color(GRID)
             ax.spines["bottom"].set_linewidth(0.8)
 
+            solid = [(x, y) for x, y in zip(xs, ys) if x < proj]
+            fcast = [(x, y) for x, y in zip(xs, ys) if x >= proj]
+
             if kind == "column":
                 # Bars encode magnitude by length, so the baseline stays at zero.
                 # 0.82 of the year step leaves a surface gap between columns.
-                ax.bar(xs, ys, width=0.82, color=INK, linewidth=0)
-                label_dx, label_dy, label_ha = 0, 6, "center"
+                ax.bar([x for x, _ in solid], [y for _, y in solid],
+                       width=0.82, color=hue, linewidth=0)
+                # The forecast year is an open box with a dashed outline, so it
+                # reads as a projection rather than an observation.
+                ax.bar([x for x, _ in fcast], [y for _, y in fcast],
+                       width=0.82, facecolor="none", edgecolor=hue,
+                       linewidth=1.4, linestyle=(0, (3.2, 2.2)), zorder=4)
+                label_dx, label_dy, label_ha = 0, 7, "center"
             else:
-                ax.plot(xs, ys, color=INK, linewidth=2.0, solid_capstyle="round")
-                ax.plot([xs[-1]], [ys[-1]], "o", color=INK, markersize=4.6,
-                        markeredgecolor=SURFACE, markeredgewidth=1.4, zorder=5)
-                label_dx, label_dy, label_ha = -3, 9, "right"
+                ax.plot([x for x, _ in solid], [y for _, y in solid],
+                        color=hue, linewidth=2.0, solid_capstyle="round")
+                if fcast:
+                    bridge = solid[-1:] + fcast
+                    ax.plot([x for x, _ in bridge], [y for _, y in bridge],
+                            color=hue, linewidth=2.0, linestyle=(0, (3.2, 2.2)))
+                ax.plot([xs[-1]], [ys[-1]], "o", markersize=6.4, zorder=5,
+                        markerfacecolor=SURFACE, markeredgecolor=hue,
+                        markeredgewidth=1.8)
+                label_dx, label_dy, label_ha = -3, 10, "right"
 
             # One direct label per panel: the latest value.
             ax.annotate(f"{ys[-1]:,.1f}" if ys[-1] < 100 else f"{ys[-1]:,.0f}",
                         (xs[-1], ys[-1]), textcoords="offset points",
                         xytext=(label_dx, label_dy), ha=label_ha, fontsize=10.5,
-                        fontweight="bold", color=INK)
+                        fontweight="bold", color=TEXT)
 
             pad_l = 0.9 if kind == "column" else 1
-            pad_r = 2.2 if kind == "column" else 4
-            ax.set_xlim(year_min - pad_l, YEAR_MAX + pad_r)
+            pad_r = 1.4 if kind == "column" else 3
+            ax.set_xlim(year_min - pad_l, proj + pad_r)
             ax.set_ylim(0, limits[metric])
-            step = 20 if (YEAR_MAX - year_min) > 40 else 5
-            ticks = [y for y in range(year_min, YEAR_MAX + 1) if y % step == 0]
+            step = 20 if (proj - year_min) > 40 else 5
+            ticks = [y for y in range(year_min, proj + 1) if y % step == 0]
             ax.set_xticks(ticks)
             ax.tick_params(axis="both", length=0, labelsize=10, pad=5)
             if c == 0:
@@ -232,43 +235,25 @@ def main() -> None:
             # Row name above the row, clear of the crop titles.
             if c == 0:
                 ax.text(0.0, 1.175, row_label, transform=ax.transAxes,
-                        fontsize=11.5, fontweight="bold", color=INK,
+                        fontsize=11.5, fontweight="bold", color=MUTED,
                         ha="left", va="bottom")
 
-    # Derived, never hardcoded: the numbers must match whatever span was asked for.
-    growth = {}
-    for slug, label in CROPS:
-        pts = data[slug][1]
-        growth[label] = {m: (pts[m][0][1], pts[m][-1][1])
-                         for m in ("yield", "production")}
-    y_ratios = [b / a for g in growth.values() for a, b in [g["yield"]]]
-    prod_faster = all(g["production"][1] / g["production"][0]
-                      > g["yield"][1] / g["yield"][0] for g in growth.values())
-    y_lo, y_hi = min(y_ratios), max(y_ratios)
-    prod_bits = ", ".join(
-        f"{fmt_change(*g['production'])} {label.split(' (')[0].lower()}"
-        for label, g in growth.items())
-    tail = ("and production has grown faster in every case: " if prod_faster
-            else "and production has changed by ")
-
-    fig.text(0.062, 0.950, "Yield and production of the world's four largest crops",
+    fig.text(0.062, 0.950,
+             "How is global production of the largest crops tracking this year?",
              fontsize=19, fontweight="bold", color=TEXT, ha="left",
              fontfamily=display)
     fig.text(0.062, 0.898,
-             f"World totals. {yield_phrase(y_lo, y_hi, year_min)}, {tail}\n"
-             f"{prod_bits}.",
+             f"Historical estimates, and the latest forecast for {proj} "
+             f"(as of the latest August release).",
              fontsize=11.5, color=MUTED, ha="left", va="top", linespacing=1.5)
 
     fig.text(0.062, 0.115,
-             "Data: USDA Foreign Agricultural Service, Production, Supply and "
-             "Distribution (PSD), August 2026 release. Marketing years, labelled by "
-             "the beginning year.\n"
-             f"{YEAR_MAX} is a provisional estimate; the {YEAR_MAX + 1} USDA forecast "
-             "is excluded. Rice production is on a milled basis while rice yield is "
-             "on a rough (paddy) basis, as published by USDA.\n"
-             "Yield axes are shared across the top row and production axes across the "
-             "bottom row; both start at zero."
-             + ("" if year_min > 1964 else " Soybean data begins in 1964."),
+             "Data source: USDA Foreign Agricultural Service, Production, Supply "
+             "and Distribution (PSD). Based on marketing years, given as the start "
+             "year.\n"
+             f"{proj} is a forecast, shown as an open dashed {'bar' if kind == 'column' else 'line'}; "
+             f"{prov} is a provisional estimate. Rice production is on a milled basis "
+             "while rice yield is on a rough (paddy) basis, as published by USDA.",
              fontsize=8.8, color=FAINT, ha="left", va="top", linespacing=1.55)
 
     suffix = ("" if kind == "line" else "-column") + \
