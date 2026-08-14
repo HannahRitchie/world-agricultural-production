@@ -170,8 +170,8 @@ def main() -> None:
 
     fig, axes = plt.subplots(
         2, 4, figsize=(13.2, 6.9), dpi=190,
-        gridspec_kw={"hspace": 0.52, "wspace": 0.13,
-                     "left": 0.062, "right": 0.988, "top": 0.735, "bottom": 0.185})
+        gridspec_kw={"hspace": 0.85, "wspace": 0.13,
+                     "left": 0.062, "right": 0.988, "top": 0.750, "bottom": 0.185})
 
     rows = [
         ("yield", "Yield", "tonnes per hectare"),
@@ -245,7 +245,7 @@ def main() -> None:
              "How is global production of the largest crops tracking this year?",
              fontsize=19, fontweight="bold", color=TEXT, ha="left",
              fontfamily=display)
-    fig.text(0.062, 0.918,
+    fig.text(0.062, 0.936,
              f"Historical estimates, and the latest forecast for {proj} "
              f"(as of the latest August release).",
              fontsize=11.5, color=MUTED, ha="left", va="top", linespacing=1.5)
@@ -267,14 +267,16 @@ def main() -> None:
     fig_w = fig.get_size_inches()[0] * fig.dpi
     for r, (_metric, row_label, unit) in enumerate(rows):
         box = axes[r][0].get_position()
-        y = box.y1 + 0.062
+        y = box.y1 + 0.082
         lead = fig.text(0.062, y, row_label, fontsize=15.5, fontweight="bold",
                         color=TEXT, ha="left", va="baseline", fontfamily=display)
         x_unit = lead.get_window_extent(renderer).x1 / fig_w + 0.008
         fig.text(x_unit, y, unit, fontsize=11.5, color=MUTED,
                  ha="left", va="baseline")
+        # Rule sits directly under the row header, above the crop names.
+        rule_y = y - 0.022
         fig.add_artist(plt.Line2D(
-            [0.062, 0.988], [y - 0.028, y - 0.028], transform=fig.transFigure,
+            [0.062, 0.988], [rule_y, rule_y], transform=fig.transFigure,
             color=GRID, linewidth=1.0, zorder=0))
 
     suffix = ("" if kind == "line" else "-column") + \
