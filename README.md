@@ -139,6 +139,21 @@ otherwise render "bold" as regular without warning.
 
 ## Checks
 
+`uv run scripts/validate_data.py` reconciles every published figure against the
+raw PSD CSV — 293,298 country values, 4,779 World aggregates, continent closure,
+the yield identity and every unit string. It is an independent re-derivation, not
+a re-run of the build, and it takes a few minutes.
+
+It also reports two caveats that are properties of the source rather than defects:
+
+- **23 of 60 commodities are tracked for fewer than 20 countries**, so their
+  "World" is a sum of major producers rather than a global total. PSD milk is 69%
+  of FAO's world figure for exactly this reason. Corn is tracked for 115
+  countries, whole milk powder for 13, mixed grain for 5.
+- **16 commodity-years where the countries reporting area cover under 80% of
+  production** — all early oil palm, as low as 12% in 1968. The aggregate yield
+  there describes the countries that report area, not the world.
+
 With the server running:
 
 ```bash
