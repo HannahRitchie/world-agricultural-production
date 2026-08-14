@@ -108,13 +108,18 @@ uv run scripts/make_static_chart.py                        # lines, 1960-2025
 uv run scripts/make_static_chart.py --kind column --start 2000
 ```
 
-Each crop carries its own hue, held constant down its column so the yield and
-production panels read as a pair. Four hues is the interesting constraint: small
-multiples are an all-pairs form, and the reference palette's first four slots fail
-it (yellow meets orange). Blue/orange/aqua/violet clears every hard gate — worst
-CVD dE 9.2, worst normal-vision 16.3 — and was picked by running the validator, not
-by eye. Aqua carries a contrast warning, so values and titles are set in text ink
-rather than the series colour, which is the required relief.
+Each crop carries a soft hue, held constant down its column so the yield and
+production panels read as a pair. Those hues do **not** pass the palette
+validator's separation gates — worst normal-vision dE 12.1 against a floor of 15 —
+because low chroma is precisely what those gates measure. That is a considered
+exception rather than an oversight: every panel holds a single series named by its
+own title, so colour never carries identity here, only association between the two
+panels of a column. The same four hues would not be safe in a chart where the
+crops share one plot.
+
+The metric leads the hierarchy: "Yield" and "Production" are set in display
+weight with the unit alongside, while crop names recede to muted text on the top
+row only.
 
 The forecast year is drawn as an open dashed bar (or dashed line with a hollow
 marker), matching the explorer's treatment. Which year that is comes from

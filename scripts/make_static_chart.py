@@ -37,14 +37,19 @@ OUT_DIR = ROOT / "static-charts"
 FONT_CACHE = Path(__file__).parent / "_fonts"
 
 # Hue per crop, held constant down each column so the yield panel and the
-# production panel for a crop read as a pair. This set passes the all-pairs
-# gates that small multiples require (worst CVD dE 9.2, normal-vision 16.3);
-# the reference palette's first four do not, because yellow meets orange.
+# production panel for a crop read as a pair.
+#
+# These are deliberately soft, and soft hues cannot clear the palette validator's
+# separation gates (worst normal-vision dE 12.1 against a floor of 15) — low
+# chroma is exactly what those gates measure. That is acceptable *here* because
+# every panel holds a single series named by its own title, so colour never
+# carries identity; it only associates the two panels of a column. Do not reuse
+# this set where crops share one plot, and colour would be load-bearing.
 CROPS = [
-    ("corn", "Corn (maize)", "#2a78d6"),
-    ("wheat", "Wheat", "#eb6834"),
-    ("rice-milled", "Rice", "#1baf7a"),
-    ("oilseed-soybean", "Soybeans", "#4a3aa7"),
+    ("corn", "Corn (maize)", "#6b93c4"),
+    ("wheat", "Wheat", "#d9895f"),
+    ("rice-milled", "Rice", "#5fa98a"),
+    ("oilseed-soybean", "Soybeans", "#bd7fa8"),
 ]
 
 # The provisional and forecast years come from the build, not hardcoded, so they
@@ -55,6 +60,12 @@ MUTED = "#5b6b7c"
 FAINT = "#8b98a5"
 GRID = "#e3e8ec"          # solid hairline, one shade off the surface
 SURFACE = "#ffffff"
+
+
+def darken(hex_colour: str, factor: float = 0.72) -> str:
+    """A deeper step of a hue, so a dashed outline reads against a soft fill."""
+    r, g, b = (int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02x%02x%02x" % tuple(min(255, int(c * factor)) for c in (r, g, b))
 
 
 def install_fonts() -> tuple[str, str]:
@@ -152,8 +163,8 @@ def main() -> None:
 
     fig, axes = plt.subplots(
         2, 4, figsize=(13.2, 6.9), dpi=190,
-        gridspec_kw={"hspace": 0.40, "wspace": 0.13,
-                     "left": 0.062, "right": 0.988, "top": 0.760, "bottom": 0.190})
+        gridspec_kw={"hspace": 0.52, "wspace": 0.13,
+                     "left": 0.062, "right": 0.988, "top": 0.735, "bottom": 0.185})
 
     rows = [
         ("yield", "Yield", "tonnes per hectare"),
@@ -165,7 +176,7 @@ def main() -> None:
         top = max(v for slug, _, _ in CROPS for _, v in data[slug][1][metric])
         if metric == "production":
             top /= 1000.0
-        limits[metric] = top * 1.12
+        limits[metric] = top * 1.06
 
     for r, (metric, row_label, unit) in enumerate(rows):
         for c, (slug, label, hue) in enumerate(CROPS):
@@ -193,9 +204,8 @@ def main() -> None:
                 # The forecast year is an open box with a dashed outline, so it
                 # reads as a projection rather than an observation.
                 ax.bar([x for x, _ in fcast], [y for _, y in fcast],
-                       width=0.82, facecolor="none", edgecolor=hue,
+                       width=0.82, facecolor="none", edgecolor=darken(hue),
                        linewidth=1.4, linestyle=(0, (3.2, 2.2)), zorder=4)
-                label_dx, label_dy, label_ha = 0, 7, "center"
             else:
                 ax.plot([x for x, _ in solid], [y for _, y in solid],
                         color=hue, linewidth=2.0, solid_capstyle="round")
@@ -204,15 +214,8 @@ def main() -> None:
                     ax.plot([x for x, _ in bridge], [y for _, y in bridge],
                             color=hue, linewidth=2.0, linestyle=(0, (3.2, 2.2)))
                 ax.plot([xs[-1]], [ys[-1]], "o", markersize=6.4, zorder=5,
-                        markerfacecolor=SURFACE, markeredgecolor=hue,
+                        markerfacecolor=SURFACE, markeredgecolor=darken(hue),
                         markeredgewidth=1.8)
-                label_dx, label_dy, label_ha = -3, 10, "right"
-
-            # One direct label per panel: the latest value.
-            ax.annotate(f"{ys[-1]:,.1f}" if ys[-1] < 100 else f"{ys[-1]:,.0f}",
-                        (xs[-1], ys[-1]), textcoords="offset points",
-                        xytext=(label_dx, label_dy), ha=label_ha, fontsize=10.5,
-                        fontweight="bold", color=TEXT)
 
             pad_l = 0.9 if kind == "column" else 1
             pad_r = 1.4 if kind == "column" else 3
@@ -222,27 +225,20 @@ def main() -> None:
             ticks = [y for y in range(year_min, proj + 1) if y % step == 0]
             ax.set_xticks(ticks)
             ax.tick_params(axis="both", length=0, labelsize=10, pad=5)
-            if c == 0:
-                ax.set_ylabel(unit, fontsize=10, color=FAINT, labelpad=8)
-            else:
+            if c != 0:
                 ax.set_yticklabels([])
             if r == 0:
                 ax.set_xticklabels([])
-            # Crop name over every panel in both rows, so each row reads on its own.
-            ax.set_title(label, fontsize=12.5, fontweight="bold",
-                         color=TEXT, pad=8, fontfamily=display)
+                # Crop names sit on the top row only, and recede: the metric is
+                # the distinction being drawn, and the columns are aligned.
+                ax.set_title(label, fontsize=12, fontweight="normal",
+                             color=MUTED, pad=7)
 
-            # Row name above the row, clear of the crop titles.
-            if c == 0:
-                ax.text(0.0, 1.175, row_label, transform=ax.transAxes,
-                        fontsize=11.5, fontweight="bold", color=MUTED,
-                        ha="left", va="bottom")
-
-    fig.text(0.062, 0.950,
+    fig.text(0.062, 0.952,
              "How is global production of the largest crops tracking this year?",
              fontsize=19, fontweight="bold", color=TEXT, ha="left",
              fontfamily=display)
-    fig.text(0.062, 0.898,
+    fig.text(0.062, 0.918,
              f"Historical estimates, and the latest forecast for {proj} "
              f"(as of the latest August release).",
              fontsize=11.5, color=MUTED, ha="left", va="top", linespacing=1.5)
@@ -255,6 +251,24 @@ def main() -> None:
              f"{prov} is a provisional estimate. Rice production is on a milled basis "
              "while rice yield is on a rough (paddy) basis, as published by USDA.",
              fontsize=8.8, color=FAINT, ha="left", va="top", linespacing=1.55)
+
+    # Row headers: the metric leads in display weight, the unit follows in muted
+    # ink on the same line. Drawn after layout so the unit can be positioned from
+    # the measured width of the metric word.
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    fig_w = fig.get_size_inches()[0] * fig.dpi
+    for r, (_metric, row_label, unit) in enumerate(rows):
+        box = axes[r][0].get_position()
+        y = box.y1 + 0.062
+        lead = fig.text(0.062, y, row_label, fontsize=15.5, fontweight="bold",
+                        color=TEXT, ha="left", va="baseline", fontfamily=display)
+        x_unit = lead.get_window_extent(renderer).x1 / fig_w + 0.008
+        fig.text(x_unit, y, unit, fontsize=11.5, color=MUTED,
+                 ha="left", va="baseline")
+        fig.add_artist(plt.Line2D(
+            [0.062, 0.988], [y - 0.028, y - 0.028], transform=fig.transFigure,
+            color=GRID, linewidth=1.0, zorder=0))
 
     suffix = ("" if kind == "line" else "-column") + \
              ("" if year_min == 1960 else f"-{year_min}")
