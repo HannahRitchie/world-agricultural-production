@@ -378,6 +378,42 @@ with sync_playwright() as p:
     check(range_state(pg)[:2] == ("1987", "2026"),
           f"Ukraine starts 1987, not 1960: {range_state(pg)[:2]}")
 
+    print("\nWorld coverage note:")
+
+    def world_note(pg):
+        got = [t for t in pg.eval_on_selector_all(".legend-note", "e=>e.map(x=>x.textContent)")
+               if "World" in t and ("sums" in t or "weighted" in t)]
+        return got[0] if got else ""
+
+    pg.goto(BASE + "?tab=chart&food=wheat&metric=production&entities=%40World")
+    pg.wait_for_timeout(2400)
+    check(world_note(pg) == "World sums the 79 countries and regions with reported "
+                            "output in 2026.", f"wheat: {world_note(pg)!r}")
+    # counts contributors, not the many countries USDA lists at zero
+    n_series = pg.evaluate("Object.keys(COMMODITY.series).filter(c=>!c.startsWith('@')"
+                           "&&COMMODITY.series[c].production).length")
+    check(n_series > 79, f"zero-output entities excluded ({n_series} listed, 79 counted)")
+
+    pg.goto(BASE + "?tab=chart&food=wheat&metric=yield&entities=%40World")
+    pg.wait_for_timeout(2400)
+    check("production-weighted yield" in world_note(pg),
+          f"yield is described as a ratio, not a sum: {world_note(pg)!r}")
+
+    pg.goto(BASE + "?tab=chart&food=wheat&metric=production&entities=CH~IN")
+    pg.wait_for_timeout(2400)
+    check(world_note(pg) == "", "no note when World is not plotted")
+
+    for food, expect_n in (("pistachios-inshell-basis", 5), ("dairy-milk-fluid", 18)):
+        pg.goto(BASE + f"?tab=columns&food={food}&metric=production&entities=%40World")
+        pg.wait_for_timeout(2400)
+        note = world_note(pg)
+        check(f"the {expect_n} countries" in note and "major producers" in note,
+              f"{food}: {note!r}")
+
+    pg.goto(BASE + "?tab=table&food=corn&metric=production&year=2026")
+    pg.wait_for_timeout(2400)
+    check("115 countries" in world_note(pg), f"table/corn: {world_note(pg)!r}")
+
     print("\nfooter: source line, then note, then last-updated:")
     pg.goto(BASE)
     pg.wait_for_timeout(2500)

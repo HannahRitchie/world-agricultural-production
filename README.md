@@ -55,6 +55,13 @@ On the map, hovering a legend bin dims everything outside that range, and clicki
 a country adds it to the selection and switches to the Chart so you land on its
 time series.
 
+Whenever World is displayed, a note says what it sums — "World sums the 79
+countries and regions with reported output in 2026" — counting contributors rather
+than the many countries USDA lists at zero (145 entities appear for wheat; 79 grow
+any). Below 20 it adds "the major producers, not every country". For the yield
+metric it says "production-weighted yield" instead, since that aggregate is a ratio
+rather than a sum.
+
 The Table is a full reference
 view — it always lists every country and region with data for the food, and
 *highlights* the selection rather than filtering to it. World, the continents and
@@ -146,10 +153,13 @@ a re-run of the build, and it takes a few minutes.
 
 It also reports two caveats that are properties of the source rather than defects:
 
-- **23 of 60 commodities are tracked for fewer than 20 countries**, so their
-  "World" is a sum of major producers rather than a global total. PSD milk is 69%
-  of FAO's world figure for exactly this reason. Corn is tracked for 115
-  countries, whole milk powder for 13, mixed grain for 5.
+- **23 of 60 commodities have output in fewer than 20 countries.** USDA tracks the
+  producers that matter rather than every country, so these are mostly still close
+  to a world total — the median top-3 share is 84%, and pistachios (5 countries) is
+  95% in three. The explorer states the count whenever World is shown, so a reader
+  can judge. Note that PSD milk being 69% of FAO's figure is *definitional*, not a
+  coverage gap: PSD is cow milk in major countries, FAO is all milk species
+  worldwide.
 - **16 commodity-years where the countries reporting area cover under 80% of
   production** — all early oil palm, as low as 12% in 1968. The aggregate yield
   there describes the countries that report area, not the world.

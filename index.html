@@ -1006,6 +1006,7 @@ function drawLine() {
 
     if (showVintage) drawVintageLegend(prov, proj);
     drawFoldedNote();
+    if (withData.includes('@World')) drawWorldNote(yrEnd);
 }
 
 /**
@@ -1054,6 +1055,43 @@ function promptForSelection() {
  * Explains gaps caused by USDA folding a member state into the EU total — the
  * reason UK wheat, for instance, only begins in 2016.
  */
+/**
+ * How many entities the World aggregate actually sums, for a given metric and
+ * year. Counted from the loaded data rather than stored, so it is exact for any
+ * year the reader is looking at.
+ */
+function worldCoverage(year, metric) {
+    const i = COMMODITY.years.indexOf(year);
+    if (i < 0) return 0;
+    return Object.keys(COMMODITY.series).filter(c => {
+        if (c.startsWith('@')) return false;          // computed aggregates
+        const s = COMMODITY.series[c][metric];
+        // Only entities that actually contribute. USDA lists many countries at
+        // zero, and counting those would overstate how complete the total is:
+        // 123 entities appear for wheat, but 79 grow any.
+        return s && s[i] !== null && s[i] > 0;
+    }).length;
+}
+
+/**
+ * Says what World is a sum of. USDA tracks the producers that matter rather than
+ * every country, so for some foods this is a short list — stating the number lets
+ * a reader judge how complete the total is.
+ */
+function drawWorldNote(year) {
+    const n = worldCoverage(year, currentMetric);
+    if (!n) return;
+    // Yield is a ratio, not a sum, so say what it actually is.
+    const lead = currentMetric === 'yield'
+        ? `World is the production-weighted yield of the ${n} countries and regions `
+          + `reporting one in ${year}`
+        : `World sums the ${n} countries and regions with reported `
+          + `${currentMetric === 'area' ? 'area' : 'output'} in ${year}`;
+    const tail = n < 20 ? ' — the major producers, not every country.' : '.';
+    d3.select('#legend-holder').append('div').attr('class', 'legend-note')
+        .text(lead + tail);
+}
+
 function drawFoldedNote() {
     const folded = COMMODITY.eu_folded || {};
     const shownCodes = currentView === 'columns'
@@ -1313,6 +1351,7 @@ function drawColumns() {
 
     if (showVintage) drawVintageLegend(prov, proj);
     drawFoldedNote();
+    if (code === '@World') drawWorldNote(yrEnd);
 }
 
 // ---- table ----------------------------------------------------------------
@@ -1371,7 +1410,11 @@ function drawTable() {
         .data(r => cols.map(c => ({ text: c.fmt(r), cls: c.cls ? c.cls(r) : null })))
         .enter().append('td')
         .attr('class', d => d.cls).text(d => d.text);
+
+    if (j_has_world(rows)) drawWorldNote(currentYear);
 }
+
+const j_has_world = rows => rows.some(r => r.code === '@World');
 
 function noData() {
     d3.select('#viz').append('div').attr('class', 'no-data')
