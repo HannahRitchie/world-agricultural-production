@@ -273,11 +273,8 @@ def main() -> None:
         x_unit = lead.get_window_extent(renderer).x1 / fig_w + 0.008
         fig.text(x_unit, y, unit, fontsize=11.5, color=MUTED,
                  ha="left", va="baseline")
-        # Rule sits directly under the row header, above the crop names.
-        rule_y = y - 0.022
-        fig.add_artist(plt.Line2D(
-            [0.062, 0.988], [rule_y, rule_y], transform=fig.transFigure,
-            color=GRID, linewidth=1.0, zorder=0))
+        # No banding rule: a full-width hairline above the panels lands near the
+        # 8 t/ha position on the yield scale and reads as a stray gridline.
 
     suffix = ("" if kind == "line" else "-column") + \
              ("" if year_min == 1960 else f"-{year_min}")
