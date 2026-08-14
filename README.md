@@ -104,9 +104,15 @@ usda-food/
 soybeans, into `static-charts/`:
 
 ```bash
-uv run scripts/make_static_chart.py                        # lines, 1960-2025
+uv run scripts/make_static_chart.py                        # lines, 1960-
 uv run scripts/make_static_chart.py --kind column --start 2000
+uv run scripts/make_static_chart.py --kind column --start 2000 --format both
 ```
+
+`--format png|svg|both`. SVG text is converted to outlines by default, so the file
+renders identically anywhere, including where Inter and Lato are not installed.
+Add `--svg-text` to keep live `<text>` instead — smaller and editable in
+Illustrator or Figma, but it needs those fonts wherever it is opened.
 
 Each crop carries a soft hue, held constant down its column so the yield and
 production panels read as a pair. Those hues do **not** pass the palette

@@ -139,6 +139,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--kind", choices=("line", "column"), default="line")
     ap.add_argument("--start", type=int, default=1960)
+    ap.add_argument("--format", choices=("png", "svg", "both"), default="png")
+    ap.add_argument("--svg-text", action="store_true",
+                    help="keep SVG text as editable <text> rather than outlines; "
+                         "needs Inter and Lato installed wherever it is opened")
     args = ap.parse_args()
     year_min, kind = args.start, args.kind
 
@@ -152,7 +156,10 @@ def main() -> None:
         "ytick.color": MUTED,
         "figure.facecolor": SURFACE,
         "axes.facecolor": SURFACE,
-        "svg.fonttype": "none",
+        # Outlines by default: the SVG then renders identically anywhere,
+        # including where Inter and Lato are not installed. --svg-text keeps
+        # live text instead, for editing in Illustrator or Figma.
+        "svg.fonttype": "none" if args.svg_text else "path",
     })
 
     data = {slug: load(slug, year_min) for slug, _, _ in CROPS}
@@ -272,13 +279,16 @@ def main() -> None:
 
     suffix = ("" if kind == "line" else "-column") + \
              ("" if year_min == 1960 else f"-{year_min}")
-    OUT = OUT_DIR / f"yield-and-production-4x2{suffix}.png"
     OUT_DIR.mkdir(exist_ok=True)
-    fig.savefig(OUT, facecolor=SURFACE)
-    print(f"wrote {OUT.relative_to(ROOT)} "
-          f"({OUT.stat().st_size / 1024:.0f} KB, "
-          f"{int(fig.get_size_inches()[0] * fig.dpi)}x"
-          f"{int(fig.get_size_inches()[1] * fig.dpi)} px)")
+    formats = ("png", "svg") if args.format == "both" else (args.format,)
+    for ext in formats:
+        out = OUT_DIR / f"yield-and-production-4x2{suffix}.{ext}"
+        fig.savefig(out, facecolor=SURFACE)
+        size = f"{int(fig.get_size_inches()[0] * fig.dpi)}x" \
+               f"{int(fig.get_size_inches()[1] * fig.dpi)} px" if ext == "png" \
+               else ("live text" if args.svg_text else "outlined text")
+        print(f"wrote {out.relative_to(ROOT)} "
+              f"({out.stat().st_size / 1024:.0f} KB, {size})")
 
 
 if __name__ == "__main__":
